@@ -92,7 +92,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
-    return res.status(200).json({ _id: user._id, email: user.email, role: user.role, businessId: user.businessId });
+    return res.status(200).json({ token, _id: user._id, email: user.email, role: user.role, businessId: user.businessId });
   } catch (error) {
     console.error('Error in POST /api/auth/login:', error);
     return res.status(500).json({ error: 'Internal Server Error' });

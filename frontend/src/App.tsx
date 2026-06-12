@@ -284,6 +284,11 @@ const getRouteInfo = () => {
   return { view: 'admin', businessId: '' };
 };
 
+const getAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('auth_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export default function App() {
   const [route, setRoute] = useState(getRouteInfo());
   const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: '', show: false });
@@ -296,7 +301,7 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setUser(data);
@@ -320,6 +325,7 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.token) localStorage.setItem('auth_token', data.token);
         setUser(data);
         if (data.role === 'admin') {
           navigateTo('/super-admin');
@@ -335,7 +341,8 @@ export default function App() {
   };
 
   const logout = async () => {
-    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include', headers: getAuthHeaders() });
+    localStorage.removeItem('auth_token');
     setUser(null);
     navigateTo('/login');
   };
@@ -448,7 +455,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
 
   const fetchBusinessDetails = async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE}/business/${id}`);
+      const response = await fetch(`${API_BASE}/business/${id}`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setName(data.name);
@@ -468,7 +475,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   const fetchFeedbacks = async (id: string) => {
     setLoadingFeedbacks(true);
     try {
-      const response = await fetch(`${API_BASE}/business/${id}/feedbacks`);
+      const response = await fetch(`${API_BASE}/business/${id}/feedbacks`, { credentials: 'include', headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setFeedbacks(data.feedbacks || []);
@@ -496,7 +503,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
       
       const response = await fetch(`${API_BASE}/business`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload)
       });
       
@@ -561,7 +568,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   const saveQrSettings = async () => {
     try {
       const res = await fetch(`${API_BASE}/business/${businessId}/qr-settings`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include',
         body: JSON.stringify({ qrColor, qrBgColor })
       });
       if (res.ok) showToast('QR settings saved!');
@@ -1203,6 +1210,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
     try {
       await fetch(`${API_BASE}/business/${businessId}/scan`, {
         method: 'POST',
+        headers: getAuthHeaders()
       });
     } catch (err) {
       console.log('Failed to log scan on server, running offline.');
@@ -1211,7 +1219,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
 
   const fetchBusinessContext = async () => {
     try {
-      const response = await fetch(`${API_BASE}/business/${businessId}`);
+      const response = await fetch(`${API_BASE}/business/${businessId}`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setBusiness(data);
@@ -1243,7 +1251,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
     try {
       const response = await fetch(`${API_BASE}/business/${businessId}/generate-reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ rating: selectedRating, language: targetLanguage })
       });
       if (response.ok) {
@@ -1684,17 +1692,17 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const bizRes = await fetch(`${API_BASE}/admin/businesses`, { credentials: 'include' });
-      const fbRes = await fetch(`${API_BASE}/admin/feedbacks`, { credentials: 'include' });
-      const usersRes = await fetch(`${API_BASE}/admin/users`, { credentials: 'include' });
-      const regRes = await fetch(`${API_BASE}/admin/registrations`, { credentials: 'include' });
+      const bizRes = await fetch(`${API_BASE}/admin/businesses`, { credentials: 'include', headers: getAuthHeaders() });
+      const fbRes = await fetch(`${API_BASE}/admin/feedbacks`, { credentials: 'include', headers: getAuthHeaders() });
+      const usersRes = await fetch(`${API_BASE}/admin/users`, { credentials: 'include', headers: getAuthHeaders() });
+      const regRes = await fetch(`${API_BASE}/admin/registrations`, { credentials: 'include', headers: getAuthHeaders() });
       if (bizRes.ok) setBusinesses(await bizRes.json());
       if (fbRes.ok) setFeedbacks(await fbRes.json());
       if (usersRes.ok) setUsers(await usersRes.json());
       if (regRes.ok) setRegistrations(await regRes.json());
 
-      const revRes = await fetch(`${API_BASE}/admin/revenue`, { credentials: 'include' });
-      const subRes = await fetch(`${API_BASE}/admin/subscriptions`, { credentials: 'include' });
+      const revRes = await fetch(`${API_BASE}/admin/revenue`, { credentials: 'include', headers: getAuthHeaders() });
+      const subRes = await fetch(`${API_BASE}/admin/subscriptions`, { credentials: 'include', headers: getAuthHeaders() });
       if (revRes.ok) setRevenueData(await revRes.json());
       if (subRes.ok) setSubscriptions(await subRes.json());
     } catch (err) {
@@ -1708,7 +1716,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     try {
       const response = await fetch(`${API_BASE}/admin/business/${biz._id}/approve`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify({ isApproved: !biz.isApproved })
       });
@@ -1731,7 +1739,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     if (!window.confirm('Are you sure you want to delete this business and all its feedbacks? This action is irreversible.')) return;
     try {
       const response = await fetch(`${API_BASE}/admin/business/${id}`, {
-        method: 'DELETE', credentials: 'include'
+        method: 'DELETE', credentials: 'include', headers: getAuthHeaders()
       });
       if (response.ok) {
         setBusinesses(prev => prev.filter(b => b._id !== id));
@@ -1752,13 +1760,13 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       let response;
       if (editingId) {
         response = await fetch(`${API_BASE}/admin/business/${editingId}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
+          method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include', body: JSON.stringify(payload)
         });
       } else {
         payload.email = merchantEmail;
         payload.password = merchantPassword;
         response = await fetch(`${API_BASE}/admin/business`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include', body: JSON.stringify(payload)
         });
       }
       if (response.ok) {
@@ -1813,7 +1821,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleSaveEditModal = async () => {
     try {
       const res = await fetch(`${API_BASE}/admin/business/${editModal.biz._id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include',
         body: JSON.stringify(editForm)
       });
       if (res.ok) {
@@ -1831,7 +1839,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleApproveRegistration = async (reg: any) => {
     try {
       const res = await fetch(`${API_BASE}/admin/registrations/${reg._id}/approve`, {
-        method: 'PUT', credentials: 'include'
+        method: 'PUT', credentials: 'include', headers: getAuthHeaders()
       });
       if (res.ok) {
         showToast(`Registration approved! Business created.`);
@@ -1848,7 +1856,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleRejectRegistration = async (reg: any) => {
     try {
       const res = await fetch(`${API_BASE}/admin/registrations/${reg._id}/reject`, {
-        method: 'PUT', credentials: 'include'
+        method: 'PUT', credentials: 'include', headers: getAuthHeaders()
       });
       if (res.ok) {
         showToast('Registration rejected.');
@@ -1864,7 +1872,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleSubscribe = async () => {
     try {
       const res = await fetch(`${API_BASE}/admin/subscribe`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include',
         body: JSON.stringify({ businessId: subModal.bizId, plan: subPlan, paymentMethod: subPaymentMethod, transactionId: subTxnId })
       });
       if (res.ok) {
