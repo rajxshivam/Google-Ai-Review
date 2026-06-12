@@ -1411,7 +1411,6 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
             <input 
               type="tel" 
               name="tel"
-              autoComplete="tel"
               className="form-input"
               value={contact}
               onChange={handleContactChange}
