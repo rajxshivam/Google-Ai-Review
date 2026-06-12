@@ -1709,6 +1709,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       const response = await fetch(`${API_BASE}/admin/business/${biz._id}/approve`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ isApproved: !biz.isApproved })
       });
       if (response.ok) {
@@ -1729,7 +1730,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleDeleteBusiness = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this business and all its feedbacks? This action is irreversible.')) return;
     try {
-      const response = await fetch(`${API_BASE}/admin/business/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE}/admin/business/${id}`, {
+        method: 'DELETE', credentials: 'include'
+      });
       if (response.ok) {
         setBusinesses(prev => prev.filter(b => b._id !== id));
         setFeedbacks(prev => prev.filter(f => f.businessId !== id));
@@ -1749,13 +1752,13 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       let response;
       if (editingId) {
         response = await fetch(`${API_BASE}/admin/business/${editingId}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
         });
       } else {
         payload.email = merchantEmail;
         payload.password = merchantPassword;
         response = await fetch(`${API_BASE}/admin/business`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
         });
       }
       if (response.ok) {
@@ -1810,7 +1813,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleSaveEditModal = async () => {
     try {
       const res = await fetch(`${API_BASE}/admin/business/${editModal.biz._id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify(editForm)
       });
       if (res.ok) {
