@@ -1151,34 +1151,22 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
-  const formatIndianPhone = (value: string): string => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.length === 0) return '';
-    if (digits.startsWith('91')) {
-      const local = digits.substring(2);
-      if (local.length <= 5) return `+91 ${local}`;
-      return `+91 ${local.substring(0, 5)} ${local.substring(5, 10)}`;
-    }
-    if (digits.length <= 5) return digits;
-    return `${digits.substring(0, 5)} ${digits.substring(5, 10)}`;
-  };
 
   const handleContactChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    if (raw === '' || raw === '+') {
-      setContact(raw);
-      return;
-    }
-    const hasPrefix = raw.startsWith('+91');
-    const digits = raw.replace(/\D/g, '');
-    const limited = hasPrefix ? `91${digits.replace(/^91/, '')}`.substring(0, 12) : digits.substring(0, 10);
-    if (hasPrefix) {
-      const local = limited.replace(/^91/, '');
-      if (local.length === 0) setContact('+91 ');
-      else if (local.length <= 5) setContact(`+91 ${local}`);
-      else setContact(`+91 ${local.substring(0, 5)} ${local.substring(5, 10)}`);
-    } else {
-      setContact(formatIndianPhone(limited));
+    setContact(e.target.value);
+  };
+
+  const formatContactOnBlur = () => {
+    const digits = contact.replace(/\D/g, '');
+    if (digits.length === 0) return;
+    if (digits.startsWith('91') && digits.length >= 12) {
+      const local = digits.substring(digits.length - 10);
+      setContact(`+91 ${local.substring(0, 5)} ${local.substring(5, 10)}`);
+    } else if (digits.length >= 10) {
+      const local = digits.substring(digits.length - 10);
+      setContact(`+91 ${local.substring(0, 5)} ${local.substring(5, 10)}`);
+    } else if (digits.length > 5) {
+      setContact(`${digits.substring(0, 5)} ${digits.substring(5)}`);
     }
   };
 
@@ -1418,14 +1406,14 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input 
               type="tel" 
-              name="tel"
+              name="phone"
               className="form-input"
               value={contact}
               onChange={handleContactChange}
+              onBlur={formatContactOnBlur}
               placeholder="XXXXX XXXXX"
               autoComplete="tel"
               inputMode="tel"
-              maxLength={14}
               style={{ flex: 1, fontVariantNumeric: 'tabular-nums' }}
             />
             <button
