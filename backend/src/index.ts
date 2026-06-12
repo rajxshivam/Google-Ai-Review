@@ -89,6 +89,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       httpOnly: true,
       secure: true,
       sameSite: 'none',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
     return res.status(200).json({ _id: user._id, email: user.email, role: user.role, businessId: user.businessId });
@@ -99,7 +100,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 });
 
 app.post('/api/auth/logout', (_req: Request, res: Response) => {
-  res.clearCookie('token');
+  res.clearCookie('token', { httpOnly: true, secure: true, sameSite: 'none', path: '/' });
   return res.status(200).json({ message: 'Logged out successfully.' });
 });
 
