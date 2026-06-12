@@ -87,8 +87,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const token = generateToken(user._id.toString());
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
     return res.status(200).json({ _id: user._id, email: user.email, role: user.role, businessId: user.businessId });
