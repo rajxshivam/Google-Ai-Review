@@ -137,7 +137,7 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
     if (digits.length > 5) {
       digits = `${digits.slice(0, 5)} ${digits.slice(5)}`;
     }
-    handleChange('mobileNumber', `+91 ${digits}`);
+    handleChange('mobileNumber', digits);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -219,9 +219,9 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
 
           <div className="form-group">
             <label className="form-label">Mobile Number</label>
-            <input type="tel" name="tel" className="form-input" value={formData.mobileNumber}
+              <input type="tel" name="tel" className="form-input" value={formData.mobileNumber}
               onChange={(e) => handleMobileChange(e.target.value)}
-              placeholder="+91 XXXXX XXXXX" />
+              placeholder="XXXXX XXXXX" />
           </div>
 
           <div className="form-group">
@@ -1414,7 +1414,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
               className="form-input"
               value={contact}
               onChange={handleContactChange}
-              placeholder="+91 XXXXX XXXXX"
+              placeholder="XXXXX XXXXX"
               autoComplete="tel"
               inputMode="tel"
               maxLength={14}
@@ -2150,8 +2150,8 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <div className="form-group">
                 <label className="form-label">Mobile Number</label>
                 <input type="tel" name="tel" className="form-input" value={mobileNumber}
-                  onChange={(e) => { let d = e.target.value.replace(/\D/g, '').slice(0, 10); if (d.length > 5) d = `${d.slice(0, 5)} ${d.slice(5)}`; setMobileNumber(`+91 ${d}`); }}
-                  placeholder="+91 XXXXX XXXXX" />
+                  onChange={(e) => { let d = e.target.value.replace(/\D/g, '').slice(0, 10); if (d.length > 5) d = `${d.slice(0, 5)} ${d.slice(5)}`; setMobileNumber(d); }}
+                  placeholder="XXXXX XXXXX" />
               </div>
             </div>
 
@@ -2415,7 +2415,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             </div>
             <div className="form-group">
               <label className="form-label">Mobile Number</label>
-              <input type="tel" className="form-input" value={editForm.mobileNumber} onChange={(e) => setEditForm(p => ({ ...p, mobileNumber: e.target.value }))} placeholder="+91 XXXXX XXXXX" />
+              <input type="tel" className="form-input" value={editForm.mobileNumber} onChange={(e) => setEditForm(p => ({ ...p, mobileNumber: e.target.value }))} placeholder="XXXXX XXXXX" />
             </div>
             <div className="form-group">
               <label className="form-label">Google Review URL</label>
