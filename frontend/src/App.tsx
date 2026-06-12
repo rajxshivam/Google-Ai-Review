@@ -219,7 +219,7 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
 
           <div className="form-group">
             <label className="form-label">Mobile Number</label>
-              <input type="tel" name="tel" className="form-input" value={formData.mobileNumber}
+              <input type="tel" name="tel" autoComplete="tel" className="form-input" value={formData.mobileNumber}
               onChange={(e) => handleMobileChange(e.target.value)}
               placeholder="XXXXX XXXXX" />
           </div>
@@ -1411,6 +1411,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
             <input 
               type="tel" 
               name="tel"
+              autoComplete="tel"
               className="form-input"
               value={contact}
               onChange={handleContactChange}
@@ -2152,7 +2153,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </div>
               <div className="form-group">
                 <label className="form-label">Mobile Number</label>
-                <input type="tel" name="tel" className="form-input" value={mobileNumber}
+                <input type="tel" name="tel" autoComplete="tel" className="form-input" value={mobileNumber}
                   onChange={(e) => { let d = e.target.value.replace(/\D/g, '').slice(0, 10); if (d.length > 5) d = `${d.slice(0, 5)} ${d.slice(5)}`; setMobileNumber(d); }}
                   placeholder="XXXXX XXXXX" />
               </div>
@@ -2418,7 +2419,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             </div>
             <div className="form-group">
               <label className="form-label">Mobile Number</label>
-              <input type="tel" className="form-input" value={editForm.mobileNumber} onChange={(e) => setEditForm(p => ({ ...p, mobileNumber: e.target.value }))} placeholder="XXXXX XXXXX" />
+              <input type="tel" name="tel" autoComplete="tel" className="form-input" value={editForm.mobileNumber} onChange={(e) => setEditForm(p => ({ ...p, mobileNumber: e.target.value }))} placeholder="XXXXX XXXXX" />
             </div>
             <div className="form-group">
               <label className="form-label">Google Review URL</label>
