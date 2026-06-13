@@ -762,6 +762,46 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
     window.open(`${API_BASE}/business/${businessId}/contacts/csv`, '_blank');
   };
 
+  const [chartTimeframe, setChartTimeframe] = useState('month');
+  const [chartStartDate, setChartStartDate] = useState('');
+  const [chartEndDate, setChartEndDate] = useState('');
+
+  const getFilteredFeedbacks = () => {
+    if (!feedbacks || feedbacks.length === 0) return [];
+    
+    const now = new Date();
+    let startDate: Date | null = null;
+    
+    if (chartTimeframe === 'day') {
+      startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else if (chartTimeframe === 'week') {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (chartTimeframe === 'month') {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (chartTimeframe === 'year') {
+      startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    } else if (chartTimeframe === 'custom' && chartStartDate && chartEndDate) {
+      const start = new Date(chartStartDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(chartEndDate);
+      end.setHours(23, 59, 59, 999);
+      
+      return feedbacks.filter(fb => {
+        const created = new Date(fb.createdAt);
+        return created >= start && created <= end;
+      });
+    }
+
+    if (!startDate) return feedbacks;
+    
+    return feedbacks.filter(fb => {
+      const created = new Date(fb.createdAt);
+      return created >= startDate!;
+    });
+  };
+
+  const filteredFeedbacks = getFilteredFeedbacks();
+
   return (
     <div className="fade-in">
       {/* Printable Flyer Elements */}
@@ -1482,32 +1522,78 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
           {activeTab === 'analytics' && (
             <div className="fade-in">
               <div className="card" style={{ marginBottom: '1.5rem' }}>
-                <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <BarChart3 size={20} color="var(--accent)" /> Analytics Overview
-                </h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <BarChart3 size={20} color="var(--accent)" /> Analytics Overview
+                  </h2>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="timeframe-buttons" style={{ display: 'flex', backgroundColor: 'var(--bg-secondary)', padding: '2px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                      {['day', 'week', 'month', 'year', 'custom'].map((tf) => (
+                        <button
+                          key={tf}
+                          type="button"
+                          onClick={() => setChartTimeframe(tf)}
+                          style={{
+                            padding: '0.25rem 0.75rem',
+                            border: 'none',
+                            background: chartTimeframe === tf ? 'var(--bg-primary)' : 'none',
+                            color: chartTimeframe === tf ? 'var(--accent)' : 'var(--text-secondary)',
+                            fontWeight: chartTimeframe === tf ? 600 : 500,
+                            borderRadius: 'var(--radius-sm)',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            boxShadow: chartTimeframe === tf ? '0 1px 3px rgba(0,0,0,0.05)' : 'none'
+                          }}
+                        >
+                          {tf.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    {chartTimeframe === 'custom' && (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={chartStartDate}
+                          onChange={(e) => setChartStartDate(e.target.value)}
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', margin: 0 }}
+                        />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>to</span>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={chartEndDate}
+                          onChange={(e) => setChartEndDate(e.target.value)}
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', margin: 0 }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <div style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>Avg Rating</p>
                     <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--warning)' }}>
-                      {feedbacks.length > 0 ? (feedbacks.reduce((sum, fb) => sum + fb.rating, 0) / feedbacks.length).toFixed(1) : '0.0'}
+                      {filteredFeedbacks.length > 0 ? (filteredFeedbacks.reduce((sum, fb) => sum + fb.rating, 0) / filteredFeedbacks.length).toFixed(1) : '0.0'}
                     </h2>
                   </div>
                   <div style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>5 Star Reviews</p>
                     <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--success)' }}>
-                      {feedbacks.filter(fb => fb.rating === 5).length}
+                      {filteredFeedbacks.filter(fb => fb.rating === 5).length}
                     </h2>
                   </div>
                   <div style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>Low Ratings (1-3)</p>
                     <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--danger)' }}>
-                      {feedbacks.filter(fb => fb.rating <= 3).length}
+                      {filteredFeedbacks.filter(fb => fb.rating <= 3).length}
                     </h2>
                   </div>
                   <div style={{ padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', textAlign: 'center' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>With Contact</p>
                     <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--accent)' }}>
-                      {feedbacks.filter(fb => fb.customerContact).length}
+                      {filteredFeedbacks.filter(fb => fb.customerContact).length}
                     </h2>
                   </div>
                 </div>
@@ -1517,14 +1603,14 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                 {/* Star Distribution Bar Chart */}
                 <div className="card">
                   <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 600 }}>Star Rating Distribution</h3>
-                  {feedbacks.length > 0 ? (
+                  {filteredFeedbacks.length > 0 ? (
                     <ResponsiveContainer width="100%" height={280}>
                       <BarChart data={[
-                        { stars: '1', count: feedbacks.filter((fb) => fb.rating === 1).length, fill: '#dc2626' },
-                        { stars: '2', count: feedbacks.filter(fb => fb.rating === 2).length, fill: '#f97316' },
-                        { stars: '3', count: feedbacks.filter(fb => fb.rating === 3).length, fill: '#eab308' },
-                        { stars: '4', count: feedbacks.filter(fb => fb.rating === 4).length, fill: '#22c55e' },
-                        { stars: '5', count: feedbacks.filter(fb => fb.rating === 5).length, fill: '#16a34a' },
+                        { stars: '1', count: filteredFeedbacks.filter((fb) => fb.rating === 1).length, fill: '#dc2626' },
+                        { stars: '2', count: filteredFeedbacks.filter(fb => fb.rating === 2).length, fill: '#f97316' },
+                        { stars: '3', count: filteredFeedbacks.filter(fb => fb.rating === 3).length, fill: '#eab308' },
+                        { stars: '4', count: filteredFeedbacks.filter(fb => fb.rating === 4).length, fill: '#22c55e' },
+                        { stars: '5', count: filteredFeedbacks.filter(fb => fb.rating === 5).length, fill: '#16a34a' },
                       ]} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="stars" tick={{ fontSize: 12 }} />
@@ -1547,14 +1633,14 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                 {/* Rating Pie Chart */}
                 <div className="card">
                   <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 600 }}>Rating Breakdown</h3>
-                  {feedbacks.length > 0 ? (
+                  {filteredFeedbacks.length > 0 ? (
                     <ResponsiveContainer width="100%" height={280}>
                       <PieChart>
                         <Pie
                           data={[
-                            { name: 'Positive (4-5)', value: feedbacks.filter(fb => fb.rating >= 4).length },
-                            { name: 'Neutral (3)', value: feedbacks.filter(fb => fb.rating === 3).length },
-                            { name: 'Negative (1-2)', value: feedbacks.filter(fb => fb.rating <= 2).length },
+                            { name: 'Positive (4-5)', value: filteredFeedbacks.filter(fb => fb.rating >= 4).length },
+                            { name: 'Neutral (3)', value: filteredFeedbacks.filter(fb => fb.rating === 3).length },
+                            { name: 'Negative (1-2)', value: filteredFeedbacks.filter(fb => fb.rating <= 2).length },
                           ].filter(d => d.value > 0)}
                           cx="50%"
                           cy="50%"
@@ -1582,11 +1668,11 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
               {/* Reviews Over Time */}
               <div className="card" style={{ marginTop: '1.5rem' }}>
                 <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 600 }}>Reviews Over Time</h3>
-                {feedbacks.length > 0 ? (
+                {filteredFeedbacks.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={(() => {
                       const grouped: Record<string, { date: string; count: number; avgRating: number }> = {};
-                      [...feedbacks].reverse().forEach(fb => {
+                      [...filteredFeedbacks].reverse().forEach(fb => {
                         const date = new Date(fb.createdAt).toLocaleDateString();
                         if (!grouped[date]) grouped[date] = { date, count: 0, avgRating: 0 };
                         grouped[date].count++;
