@@ -9,7 +9,9 @@ export interface IBusiness extends Document {
   location: string;
   mobileNumber: string;
   isApproved: boolean;
-  plan: 'free' | 'pro' | 'enterprise';
+  isActive: boolean;
+  plan: 'free' | 'yearly' | 'lifetime';
+  planStartDate: Date | null;
   planExpiry: Date | null;
   qrColor: string;
   qrBgColor: string;
@@ -25,7 +27,9 @@ const BusinessSchema = new Schema<IBusiness>({
   location: { type: String, default: '', trim: true },
   mobileNumber: { type: String, default: '', trim: true },
   isApproved: { type: Boolean, default: false },
-  plan: { type: String, enum: ['free', 'pro', 'enterprise'], default: 'free' },
+  isActive: { type: Boolean, default: false },
+  plan: { type: String, enum: ['free', 'yearly', 'lifetime'], default: 'free' },
+  planStartDate: { type: Date, default: null },
   planExpiry: { type: Date, default: null },
   qrColor: { type: String, default: '#6C63FF' },
   qrBgColor: { type: String, default: '#FFFFFF' },

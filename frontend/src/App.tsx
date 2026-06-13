@@ -1669,7 +1669,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const [revenueData, setRevenueData] = useState<{ totalRevenue: number; activeSubscriptions: number; planCounts: any; monthlyRevenue: any[] } | null>(null);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [subModal, setSubModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
-  const [subPlan, setSubPlan] = useState('pro');
+  const [subPlan, setSubPlan] = useState('yearly');
   const [subPaymentMethod, setSubPaymentMethod] = useState('UPI');
   const [subTxnId, setSubTxnId] = useState('');
 
@@ -1721,6 +1721,19 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       }));
       showToast('Offline mode: Toggled approval status locally.');
     }
+  };
+
+  const handleToggleActive = async (biz: any) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/business/${biz._id}/toggle-active`, {
+        method: 'PUT', headers: getAuthHeaders(), credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBusinesses(prev => prev.map(b => b._id === biz._id ? { ...b, isActive: data.isActive } : b));
+        showToast(data.isActive ? 'Access restored' : 'Access revoked');
+      }
+    } catch { showToast('Error toggling access.'); }
   };
 
   const handleDeleteBusiness = async (id: string) => {
@@ -1960,7 +1973,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                     <th>Category</th>
                     <th>Location</th>
                     <th>Mobile</th>
+                    <th>Plan</th>
                     <th>Approval</th>
+                    <th>Access</th>
                     <th>Review Link</th>
                     <th>Actions</th>
                   </tr>
@@ -1986,6 +2001,19 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                       <td style={{ fontSize: '0.8125rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{biz.location || '—'}</td>
                       <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{biz.mobileNumber || '—'}</td>
                       <td>
+                        <span className="copy-badge" style={{
+                          backgroundColor: biz.plan === 'lifetime' ? 'var(--warning)' : biz.plan === 'yearly' ? 'var(--accent)' : 'var(--text-tertiary)',
+                          color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', textTransform: 'uppercase'
+                        }}>
+                          {biz.plan}
+                        </span>
+                        {biz.planExpiry && (
+                          <span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                            {biz.plan === 'lifetime' ? 'No expiry' : `Exp: ${new Date(biz.planExpiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                          </span>
+                        )}
+                      </td>
+                      <td>
                         <button 
                           className={`btn ${biz.isApproved ? 'btn-secondary' : 'btn-accent'}`}
                           onClick={() => handleToggleApprove(biz)}
@@ -1998,6 +2026,23 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                           ) : (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                               <XCircle size={12} /> Pending
+                            </span>
+                          )}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          className={`btn btn-sm ${biz.isActive ? 'btn-accent' : 'btn-secondary'}`}
+                          onClick={() => handleToggleActive(biz)}
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', minWidth: '90px' }}
+                        >
+                          {biz.isActive ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#fff' }}>
+                              <CheckCircle size={12} /> Active
+                            </span>
+                          ) : (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)' }}>
+                              <XCircle size={12} /> Off
                             </span>
                           )}
                         </button>
@@ -2275,8 +2320,8 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>PLAN DISTRIBUTION</p>
                   <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.5rem' }}>
                     <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--text-tertiary)' }}>Free:</strong> {revenueData.planCounts.free}</span>
-                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--accent)' }}>Pro:</strong> {revenueData.planCounts.pro}</span>
-                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--warning)' }}>Ent:</strong> {revenueData.planCounts.enterprise}</span>
+                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--accent)' }}>Yearly:</strong> {revenueData.planCounts.yearly}</span>
+                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--warning)' }}>Lifetime:</strong> {revenueData.planCounts.lifetime}</span>
                   </div>
                 </div>
               </div>
@@ -2317,9 +2362,10 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                     <th>Business</th>
                     <th>Plan</th>
                     <th>Amount</th>
-                    <th>Payment</th>
-                    <th>Status</th>
+                    <th>Activated</th>
                     <th>Expiry</th>
+                    <th>Status</th>
+                    <th>Access</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2328,23 +2374,43 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                       <td style={{ fontWeight: 600 }}>{sub.businessId?.name || 'Unknown'}</td>
                       <td>
                         <span className="copy-badge" style={{
-                          backgroundColor: sub.plan === 'enterprise' ? 'var(--warning)' : sub.plan === 'pro' ? 'var(--accent)' : 'var(--text-tertiary)',
+                          backgroundColor: sub.plan === 'lifetime' ? 'var(--warning)' : 'var(--accent)',
                           color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', textTransform: 'uppercase'
                         }}>
                           {sub.plan}
                         </span>
                       </td>
                       <td>₹{sub.amount.toLocaleString('en-IN')}</td>
-                      <td style={{ fontSize: '0.8125rem' }}>{sub.paymentMethod || '—'}</td>
+                      <td style={{ fontSize: '0.8125rem' }}>{sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                      <td style={{ fontSize: '0.8125rem' }}>{sub.plan === 'lifetime' ? 'Never' : sub.endDate ? new Date(sub.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
                       <td>
                         <span className="copy-badge" style={{
-                          backgroundColor: sub.status === 'active' ? 'var(--success)' : sub.status === 'expired' ? 'var(--warning)' : 'var(--danger)',
+                          backgroundColor: sub.status === 'active' ? 'var(--success)' : sub.status === 'revoked' ? 'var(--danger)' : 'var(--warning)',
                           color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem'
                         }}>
                           {sub.status}
                         </span>
                       </td>
-                      <td style={{ fontSize: '0.8125rem' }}>{sub.endDate ? new Date(sub.endDate).toLocaleDateString('en-IN') : '—'}</td>
+                      <td>
+                        <button
+                          className={`btn btn-sm ${sub.status === 'active' ? 'btn-danger' : 'btn-accent'}`}
+                          onClick={async () => {
+                            if (!sub.businessId?._id) return;
+                            try {
+                              const res = await fetch(`${API_BASE}/admin/business/${sub.businessId._id}/toggle-active`, {
+                                method: 'PUT', headers: getAuthHeaders(), credentials: 'include'
+                              });
+                              if (res.ok) {
+                                showToast(sub.status === 'active' ? 'Access revoked' : 'Access restored');
+                                fetchAdminData();
+                              }
+                            } catch { showToast('Error toggling access.'); }
+                          }}
+                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                        >
+                          {sub.status === 'active' ? 'Revoke' : 'Restore'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2354,21 +2420,16 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
           <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem' }}>
             <h4 style={{ marginBottom: '1rem' }}>Plan Pricing</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-              <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '2px solid var(--border-light)' }}>
-                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem' }}>Free</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹0</p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Basic features</p>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
               <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '2px solid var(--accent)' }}>
-                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--accent)' }}>Pro</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹999<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/mo</span></p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Analytics + Priority</p>
+                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--accent)' }}>Yearly</p>
+                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹4,999<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/yr</span></p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Valid for 1 year from activation</p>
               </div>
               <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '2px solid var(--warning)' }}>
-                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--warning)' }}>Enterprise</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹4,999<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/yr</span></p>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>All features + Support</p>
+                <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--warning)' }}>Lifetime</p>
+                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹9,999</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>One-time payment, no expiry</p>
               </div>
             </div>
           </div>
@@ -2447,9 +2508,8 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             <div className="form-group">
               <label className="form-label">Select Plan</label>
               <select className="form-select" value={subPlan} onChange={(e) => setSubPlan(e.target.value)}>
-                <option value="free">Free (₹0)</option>
-                <option value="pro">Pro (₹999/mo)</option>
-                <option value="enterprise">Enterprise (₹4,999/yr)</option>
+                <option value="yearly">Yearly (₹4,999/yr)</option>
+                <option value="lifetime">Lifetime (₹9,999 one-time)</option>
               </select>
             </div>
 

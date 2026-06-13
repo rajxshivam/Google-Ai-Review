@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, IUser } from '../models/User';
+import { Business } from '../models/Business';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ai-reviews-secret-key-change-in-production';
 
@@ -19,6 +20,13 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (user.role === 'merchant' && user.businessId) {
+      const business = await Business.findById(user.businessId).select('isActive');
+      if (business && !business.isActive) {
+        return res.status(403).json({ error: 'Account has been suspended. Contact administrator.' });
+      }
     }
 
     req.user = user;

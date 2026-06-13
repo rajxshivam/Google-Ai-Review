@@ -186,7 +186,7 @@ app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('adm
     const business = await Business.create({
       name: reg.name, category: reg.category, context: reg.context,
       googleReviewUrl: reg.googleReviewUrl, location: reg.location,
-      mobileNumber: reg.mobileNumber, isApproved: true
+      mobileNumber: reg.mobileNumber, isApproved: true, isActive: true
     });
 
     // Create merchant user
@@ -799,7 +799,7 @@ app.put('/api/business/:id/qr-settings', async (req: Request, res: Response) => 
 // SUBSCRIPTION & REVENUE (Admin)
 // ==========================================
 
-const PLAN_PRICES: Record<string, number> = { free: 0, pro: 999, enterprise: 4999 };
+const PLAN_PRICES: Record<string, number> = { yearly: 4999, lifetime: 9999 };
 
 app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
@@ -807,15 +807,21 @@ app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (re
     if (!businessId || !plan) {
       return res.status(400).json({ error: 'businessId and plan are required.' });
     }
+    if (!['yearly', 'lifetime'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan must be yearly or lifetime.' });
+    }
     if (!mongoose.Types.ObjectId.isValid(businessId)) {
       return res.status(400).json({ error: 'Invalid Business ID.' });
     }
 
+    const business = await Business.findById(businessId);
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found.' });
+    }
+
     const amount = PLAN_PRICES[plan] || 0;
     const now = new Date();
-    const endDate = new Date(now);
-    if (plan === 'pro') endDate.setMonth(endDate.getMonth() + 1);
-    else if (plan === 'enterprise') endDate.setFullYear(endDate.getFullYear() + 1);
+    const endDate = plan === 'yearly' ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()) : null;
 
     const subscription = await Subscription.create({
       businessId, plan, amount, currency: 'INR',
@@ -823,11 +829,44 @@ app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (re
       status: 'active', startDate: now, endDate
     });
 
-    await Business.findByIdAndUpdate(businessId, { plan, planExpiry: endDate });
+    await Business.findByIdAndUpdate(businessId, {
+      plan, planStartDate: now, planExpiry: endDate, isActive: true
+    });
 
     return res.status(201).json(subscription);
   } catch (error) {
     console.error('Error creating subscription:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Toggle business active/inactive (revoke/restore access)
+app.put('/api/admin/business/:id/toggle-active', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid Business ID.' });
+    }
+
+    const business = await Business.findById(id);
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found.' });
+    }
+
+    const newActive = !business.isActive;
+    business.isActive = newActive;
+    await business.save();
+
+    if (!newActive) {
+      await Subscription.updateMany(
+        { businessId: id, status: 'active' },
+        { status: 'revoked' }
+      );
+    }
+
+    return res.status(200).json({ isActive: business.isActive });
+  } catch (error) {
+    console.error('Error toggling business active status:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -858,7 +897,7 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req:
       monthlyRevenue.push({ month: monthStr, revenue: monthTotal });
     }
 
-    const planCounts = { free: 0, pro: 0, enterprise: 0 };
+    const planCounts = { free: 0, yearly: 0, lifetime: 0 };
     const businesses = await Business.find();
     businesses.forEach(b => { planCounts[b.plan as keyof typeof planCounts]++; });
 
