@@ -564,6 +564,55 @@ async function initializeBusinessStock(business: any) {
   }
 }
 
+const activeReplenishments = new Set<string>();
+
+// Auto-replenish stock when the count for any rating drops below 5
+async function autoReplenishStockIfNeeded(businessId: any, rating: number) {
+  if (rating < 2 || rating > 5) return;
+  const lockKey = `${businessId.toString()}_${rating}`;
+  if (activeReplenishments.has(lockKey)) {
+    return;
+  }
+
+  try {
+    const count = await StockReview.countDocuments({
+      businessId,
+      rating,
+      isUsed: false
+    });
+
+    if (count < 5) {
+      activeReplenishments.add(lockKey);
+      console.log(`[Auto-Replenish] Stock low for business ID: ${businessId} for star: ${rating} (current: ${count}). Replenishing with 50 reviews...`);
+      
+      (async () => {
+        try {
+          const business = await Business.findById(businessId);
+          if (!business) {
+            console.error(`[Auto-Replenish] Business not found for ID: ${businessId}`);
+            return;
+          }
+          const reviews = await generateStockReviews(business, rating, 50);
+          const stockDocs = reviews.map(text => ({
+            businessId: business._id,
+            rating,
+            reviewText: text,
+            isUsed: false
+          }));
+          await StockReview.insertMany(stockDocs);
+          console.log(`[Auto-Replenish] Successfully auto-generated 50 reviews for rating ${rating} of business: ${business.name}`);
+        } catch (err) {
+          console.error(`[Auto-Replenish] Failed to auto-replenish reviews for rating ${rating} of business ${businessId}:`, err);
+        } finally {
+          activeReplenishments.delete(lockKey);
+        }
+      })();
+    }
+  } catch (err) {
+    console.error(`[Auto-Replenish] Error checking review count for business ${businessId} and rating ${rating}:`, err);
+  }
+}
+
 // Routes
 
 // 1. Create or Update Business
@@ -696,6 +745,11 @@ app.post('/api/business/:id/feedback', async (req: Request, res: Response) => {
       }
     }
 
+    // Auto-replenish stock if it drops under 5 reviews for this specific star rating
+    if (rating >= 2 && rating <= 5) {
+      autoReplenishStockIfNeeded(id, rating);
+    }
+
     return res.status(201).json({ success: true, message: 'Feedback submitted privately. Thank you!' });
   } catch (error) {
     console.error('Error in POST /api/business/:id/feedback:', error);
@@ -808,6 +862,11 @@ app.post('/api/business/:id/generate-reviews', async (req: Request, res: Respons
 
     // 2. Stock is low (< 5), fall back to dynamic generation via Gemini
     console.log(`Stock reviews low for rating ${targetRating} (current stock: ${stockCount}). Generating dynamically.`);
+
+    // Auto-replenish stock asynchronously in the background so future requests have stock
+    if (targetRating >= 2 && targetRating <= 5) {
+      autoReplenishStockIfNeeded(id, targetRating);
+    }
 
     if (!GEMINI_API_KEY) {
       const fallbackReviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
