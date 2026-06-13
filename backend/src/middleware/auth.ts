@@ -23,9 +23,9 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     }
 
     if (user.role === 'merchant' && user.businessId) {
-      const business = await Business.findById(user.businessId).select('isActive');
-      if (business && !business.isActive) {
-        return res.status(403).json({ error: 'Account has been suspended. Contact administrator.' });
+      const business = await Business.findById(user.businessId).select('isActive isApproved');
+      if (business && (!business.isActive || !business.isApproved)) {
+        return res.status(403).json({ error: 'Account has been suspended or is pending approval. Contact administrator.' });
       }
     }
 

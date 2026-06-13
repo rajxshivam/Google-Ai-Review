@@ -27,7 +27,7 @@ const BusinessSchema = new Schema<IBusiness>({
   location: { type: String, default: '', trim: true },
   mobileNumber: { type: String, default: '', trim: true },
   isApproved: { type: Boolean, default: false },
-  isActive: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
   plan: { type: String, enum: ['free', 'yearly', 'lifetime'], default: 'free' },
   planStartDate: { type: Date, default: null },
   planExpiry: { type: Date, default: null },

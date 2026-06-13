@@ -38,7 +38,7 @@ interface AuthUser {
 }
 
 interface LoginPageProps {
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   showToast: (msg: string) => void;
   user: AuthUser | null;
   navigateTo: (path: string) => void;
@@ -58,10 +58,10 @@ function LoginPage({ login, showToast, user, navigateTo }: LoginPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const success = await login(email, password);
+    const result = await login(email, password);
     setLoading(false);
-    if (!success) {
-      showToast('Invalid email or password.');
+    if (!result.success) {
+      showToast(result.error || 'Invalid email or password.');
     }
   };
 
@@ -306,6 +306,14 @@ export default function App() {
         const data = await res.json();
         setUser(data);
       } else {
+        if (res.status === 403) {
+          try {
+            const data = await res.json();
+            showToast(data.error || 'Account has been suspended. Contact administrator.');
+          } catch {
+            showToast('Account has been suspended. Contact administrator.');
+          }
+        }
         setUser(null);
       }
     } catch {
@@ -315,7 +323,7 @@ export default function App() {
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
@@ -332,11 +340,12 @@ export default function App() {
         } else {
           navigateTo('/admin');
         }
-        return true;
+        return { success: true };
       }
-      return false;
+      const data = await res.json();
+      return { success: false, error: data.error || 'Invalid email or password.' };
     } catch {
-      return false;
+      return { success: false, error: 'Could not connect to server.' };
     }
   };
 

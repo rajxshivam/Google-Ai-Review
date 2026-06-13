@@ -43,12 +43,17 @@ app.use(cookieParser());
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('Connected to MongoDB successfully.');
+    
     // Seed default admin user
     const adminExists = await User.findOne({ role: 'admin' });
     if (!adminExists) {
       await User.create({ email: 'admin@aireviews.com', password: 'admin123', role: 'admin' });
       console.log('Default admin created: admin@aireviews.com / admin123');
     }
+
+    // Initialize isActive and isApproved for legacy business documents
+    await Business.updateMany({ isActive: { $exists: false } }, { $set: { isActive: true } });
+    await Business.updateMany({ isApproved: { $exists: false } }, { $set: { isApproved: true } });
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -84,6 +89,15 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
+
+    // Prevent login if merchant's business is suspended or not approved
+    if (user.role === 'merchant' && user.businessId) {
+      const business = await Business.findById(user.businessId).select('isActive isApproved');
+      if (business && (!business.isActive || !business.isApproved)) {
+        return res.status(403).json({ error: 'Account has been suspended or is pending approval. Contact administrator.' });
+      }
+    }
+
     const token = generateToken(user._id.toString());
     res.cookie('token', token, {
       httpOnly: true,
@@ -316,9 +330,16 @@ function getFallbackReviews(name: string, category: string, context: string, rat
 // Routes
 
 // 1. Create or Update Business
-app.post('/api/business', async (req: Request, res: Response) => {
+app.post('/api/business', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id, name, category, context, googleReviewUrl, keywords } = req.body;
+    const user = req.user!;
+
+    if (user.role === 'merchant') {
+      if (id && user.businessId && user.businessId.toString() !== id) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+    }
 
     if (!name || !category || !context || !googleReviewUrl) {
       return res.status(400).json({ error: 'All fields (name, category, context, googleReviewUrl) are required.' });
@@ -342,6 +363,12 @@ app.post('/api/business', async (req: Request, res: Response) => {
     if (!business) {
       business = new Business({ name, category, context, googleReviewUrl, keywords: keywordsArray });
       await business.save();
+
+      // If merchant, link this business to their user account
+      if (user.role === 'merchant' && !user.businessId) {
+        user.businessId = business._id as any;
+        await user.save();
+      }
     }
 
     return res.status(200).json(business);
@@ -362,6 +389,14 @@ app.get('/api/business/:id', async (req: Request, res: Response) => {
     const business = await Business.findById(id);
     if (!business) {
       return res.status(404).json({ error: 'Business not found.' });
+    }
+
+    if (!business.isApproved) {
+      return res.status(403).json({ error: 'This business review portal is pending approval.' });
+    }
+
+    if (!business.isActive) {
+      return res.status(403).json({ error: 'Account has been suspended. Contact administrator.' });
     }
 
     return res.status(200).json(business);
@@ -392,6 +427,10 @@ app.post('/api/business/:id/feedback', async (req: Request, res: Response) => {
 
     if (!business.isApproved) {
       return res.status(403).json({ error: 'This business review portal is pending approval.' });
+    }
+
+    if (!business.isActive) {
+      return res.status(403).json({ error: 'Account has been suspended. Contact administrator.' });
     }
 
     const feedback = new Feedback({
@@ -433,9 +472,15 @@ app.post('/api/business/:id/scan', async (req: Request, res: Response) => {
 });
 
 // 4. Retrieve List of Feedbacks & Daily Scans Count for Admin Dashboard
-app.get('/api/business/:id/feedbacks', async (req: Request, res: Response) => {
+app.get('/api/business/:id/feedbacks', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
     }
@@ -474,6 +519,10 @@ app.post('/api/business/:id/generate-reviews', async (req: Request, res: Respons
 
     if (!business.isApproved) {
       return res.status(403).json({ error: 'This business review portal is pending approval.' });
+    }
+
+    if (!business.isActive) {
+      return res.status(403).json({ error: 'Account has been suspended. Contact administrator.' });
     }
 
     const targetRating = rating || 5;
@@ -718,9 +767,13 @@ app.get('/api/admin/feedbacks', authMiddleware, requireRole('admin'), async (req
 // CSV EXPORT ENDPOINTS
 // ==========================================
 
-app.get('/api/business/:id/feedbacks/csv', async (req: Request, res: Response) => {
+app.get('/api/business/:id/feedbacks/csv', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
     }
@@ -745,9 +798,13 @@ app.get('/api/business/:id/feedbacks/csv', async (req: Request, res: Response) =
   }
 });
 
-app.get('/api/business/:id/contacts/csv', async (req: Request, res: Response) => {
+app.get('/api/business/:id/contacts/csv', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
     }
@@ -775,9 +832,13 @@ app.get('/api/business/:id/contacts/csv', async (req: Request, res: Response) =>
 // QR CODE CUSTOMIZATION
 // ==========================================
 
-app.put('/api/business/:id/qr-settings', async (req: Request, res: Response) => {
+app.put('/api/business/:id/qr-settings', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
     const { qrColor, qrBgColor } = req.body;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
@@ -927,9 +988,15 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req:
 // MERCHANT: UPDATE PROFILE (QR + location)
 // ==========================================
 
-app.put('/api/business/:id/profile', authMiddleware, requireRole('merchant'), async (req: Request, res: Response) => {
+app.put('/api/business/:id/profile', authMiddleware, requireRole('merchant'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const user = req.user!;
+
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
     const { qrColor, qrBgColor, location, mobileNumber } = req.body;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
