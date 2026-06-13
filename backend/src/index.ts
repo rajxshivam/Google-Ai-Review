@@ -15,6 +15,8 @@ import { authMiddleware, requireRole, generateToken, AuthRequest } from './middl
 
 dotenv.config();
 
+const PLAN_PRICES: Record<string, number> = { yearly: 999, lifetime: 1499 };
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-google-reviews';
@@ -242,21 +244,39 @@ app.get('/api/admin/registrations', authMiddleware, requireRole('admin'), async 
 app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const { plan, paymentMethod, transactionId } = req.body;
+
+    if (!plan || !['yearly', 'lifetime'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan is required and must be yearly or lifetime.' });
+    }
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Registration ID.' });
     }
     const reg = await Registration.findById(id);
     if (!reg) return res.status(404).json({ error: 'Registration not found.' });
 
+    const amount = PLAN_PRICES[plan] || 0;
+    const now = new Date();
+    const endDate = plan === 'yearly' ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()) : null;
+
     // Create business
     const business = await Business.create({
       name: reg.name, category: reg.category, context: reg.context,
       googleReviewUrl: reg.googleReviewUrl, location: reg.location,
-      mobileNumber: reg.mobileNumber, isApproved: true, isActive: true
+      mobileNumber: reg.mobileNumber, isApproved: true, isActive: true,
+      plan, planStartDate: now, planExpiry: endDate
     });
 
     // Create merchant user
     const user = await User.create({ email: reg.email, password: reg.password, role: 'merchant', businessId: business._id });
+
+    // Create subscription
+    await Subscription.create({
+      businessId: business._id, plan, amount, currency: 'INR',
+      paymentMethod: paymentMethod || '', transactionId: transactionId || '',
+      status: 'active', startDate: now, endDate
+    });
 
     // Update registration status
     reg.status = 'approved';
@@ -985,15 +1005,17 @@ app.put('/api/admin/business/:id/approve', authMiddleware, requireRole('admin'),
       return res.status(400).json({ error: 'Invalid Business ID format.' });
     }
 
-    const business = await Business.findByIdAndUpdate(
-      id,
-      { isApproved },
-      { new: true }
-    );
-
+    const business = await Business.findById(id);
     if (!business) {
       return res.status(404).json({ error: 'Business not found.' });
     }
+
+    if (business.isApproved) {
+      return res.status(400).json({ error: 'Business is already approved and status cannot be changed.' });
+    }
+
+    business.isApproved = isApproved;
+    await business.save();
 
     if (business.isApproved) {
       initializeBusinessStock(business);
@@ -1140,8 +1162,6 @@ app.put('/api/business/:id/qr-settings', authMiddleware, async (req: AuthRequest
 // SUBSCRIPTION & REVENUE (Admin)
 // ==========================================
 
-const PLAN_PRICES: Record<string, number> = { yearly: 999, lifetime: 1499 };
-
 app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const { businessId, plan, paymentMethod, transactionId } = req.body;
@@ -1235,22 +1255,103 @@ app.get('/api/admin/subscriptions', authMiddleware, requireRole('admin'), async 
   }
 });
 
-app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req: Request, res: Response) => {
+app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     await expireExpiredSubscriptions();
-    const subs = await Subscription.find().populate('businessId', 'name plan planStartDate planExpiry isActive');
+
+    const timeframe = req.query.timeframe as string || 'month';
+    const startDateQuery = req.query.startDate as string;
+    const endDateQuery = req.query.endDate as string;
+
+    const now = new Date();
+    let filterStart = new Date();
+    let filterEnd = new Date();
+
+    if (timeframe === 'day') {
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'week') {
+      filterStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'month') {
+      filterStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'year') {
+      filterStart = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else if (timeframe === 'custom' && startDateQuery && endDateQuery) {
+      filterStart = new Date(startDateQuery);
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd = new Date(endDateQuery);
+      filterEnd.setHours(23, 59, 59, 999);
+    } else {
+      // Default to last 30 days
+      filterStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      filterStart.setHours(0, 0, 0, 0);
+      filterEnd.setHours(23, 59, 59, 999);
+    }
+
+    const subs = await Subscription.find({
+      startDate: { $gte: filterStart, $lte: filterEnd }
+    }).populate('businessId', 'name plan planStartDate planExpiry isActive');
+
     const totalRevenue = subs.reduce((sum, s) => sum + s.amount, 0);
 
+    const diffDays = Math.ceil((filterEnd.getTime() - filterStart.getTime()) / (1000 * 60 * 60 * 24));
     const monthlyRevenue: { month: string; revenue: number }[] = [];
-    const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      const monthStr = d.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
-      const monthTotal = subs
-        .filter(s => s.startDate >= d && s.startDate <= monthEnd)
-        .reduce((sum, s) => sum + s.amount, 0);
-      monthlyRevenue.push({ month: monthStr, revenue: monthTotal });
+
+    if (timeframe === 'day' || diffDays <= 2) {
+      const intervals = [
+        { label: '12am-4am', startHour: 0, endHour: 4 },
+        { label: '4am-8am', startHour: 4, endHour: 8 },
+        { label: '8am-12pm', startHour: 8, endHour: 12 },
+        { label: '12pm-4pm', startHour: 12, endHour: 16 },
+        { label: '4pm-8pm', startHour: 16, endHour: 20 },
+        { label: '8pm-12am', startHour: 20, endHour: 24 }
+      ];
+      intervals.forEach(interval => {
+        const total = subs.filter(s => {
+          const hour = new Date(s.startDate).getHours();
+          return hour >= interval.startHour && hour < interval.endHour;
+        }).reduce((sum, s) => sum + s.amount, 0);
+        monthlyRevenue.push({ month: interval.label, revenue: total });
+      });
+    } else if (timeframe === 'week' || diffDays <= 15) {
+      for (let i = diffDays - 1; i >= 0; i--) {
+        const d = new Date(filterEnd.getTime() - i * 24 * 60 * 60 * 1000);
+        const dateStr = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
+        const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+        const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+        const total = subs
+          .filter(s => s.startDate >= startOfDay && s.startDate <= endOfDay)
+          .reduce((sum, s) => sum + s.amount, 0);
+        monthlyRevenue.push({ month: dateStr, revenue: total });
+      }
+    } else if (timeframe === 'month' || diffDays <= 60) {
+      for (let d = new Date(filterStart); d < filterEnd; ) {
+        const nextVal = new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const endOfWeek = nextVal > filterEnd ? filterEnd : nextVal;
+        const label = `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+        const total = subs
+          .filter(s => s.startDate >= d && s.startDate <= endOfWeek)
+          .reduce((sum, s) => sum + s.amount, 0);
+        monthlyRevenue.push({ month: label, revenue: total });
+        d = nextVal;
+      }
+    } else {
+      for (let d = new Date(filterStart.getFullYear(), filterStart.getMonth(), 1); d <= filterEnd; ) {
+        const nextVal = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        const endOfMonth = nextVal > filterEnd ? filterEnd : new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+        const label = d.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+        const total = subs
+          .filter(s => s.startDate >= d && s.startDate <= endOfMonth)
+          .reduce((sum, s) => sum + s.amount, 0);
+        monthlyRevenue.push({ month: label, revenue: total });
+        d = nextVal;
+      }
     }
 
     const planCounts = { free: 0, yearly: 0, lifetime: 0 };

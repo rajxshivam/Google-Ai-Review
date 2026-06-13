@@ -479,6 +479,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   const [scansToday, setScansToday] = useState(0);
   const [loadingFeedbacks, setLoadingFeedbacks] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackFilter, setFeedbackFilter] = useState<'verified' | 'unverified' | 'all'>('verified');
 
   const [googleRefreshToken, setGoogleRefreshToken] = useState('');
   const [googleAccountId, setGoogleAccountId] = useState('');
@@ -876,7 +877,6 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
             level="H"
             fgColor={qrColor || '#000000'}
             bgColor={qrBgColor || '#ffffff'}
-            imageSettings={logoUrl ? { src: logoUrl, height: 44, width: 44, excavate: true } : undefined}
           />
         </div>
 
@@ -1011,118 +1011,129 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                   <Settings size={20} color="var(--accent)" /> Configure Business Settings
                 </h2>
                 <form onSubmit={handleSaveProfile}>
-                  <div className="form-group">
-                    <label className="form-label">Business Name</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Luigi's Pizza Palace"
-                      required
-                    />
-                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+                    {/* Left Section: Profile Details */}
+                    <div>
+                      <div className="form-group">
+                        <label className="form-label">Business Name</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="e.g. Luigi's Pizza Palace"
+                          required
+                        />
+                      </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Business Category</label>
-                    <select
-                      className="form-select"
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                    >
-                      <option value="Restaurant">Restaurant / Cafe</option>
-                      <option value="Medical Clinic">Dental / Medical Clinic</option>
-                      <option value="Auto Repair">Car Mechanic / Auto Repair</option>
-                      <option value="Retail Store">Retail Shop / Boutique</option>
-                      <option value="Hair Salon">Hair Salon / Spa</option>
-                      <option value="Hotel">Hotel / Guesthouse</option>
-                      <option value="Professional Services">Lawyer / Accountant / Agency</option>
-                      <option value="Other">Other Service Business</option>
-                    </select>
-                  </div>
+                      <div className="form-group">
+                        <label className="form-label">Business Category</label>
+                        <select
+                          className="form-select"
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value)}
+                        >
+                          <option value="Restaurant">Restaurant / Cafe</option>
+                          <option value="Medical Clinic">Dental / Medical Clinic</option>
+                          <option value="Auto Repair">Car Mechanic / Auto Repair</option>
+                          <option value="Retail Store">Retail Shop / Boutique</option>
+                          <option value="Hair Salon">Hair Salon / Spa</option>
+                          <option value="Hotel">Hotel / Guesthouse</option>
+                          <option value="Professional Services">Lawyer / Accountant / Agency</option>
+                          <option value="Other">Other Service Business</option>
+                        </select>
+                      </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Google Review URL</label>
-                    <input
-                      type="url"
-                      className="form-input"
-                      value={googleReviewUrl}
-                      onChange={(e) => setGoogleReviewUrl(e.target.value)}
-                      placeholder="https://g.page/r/YOUR_BUSINESS_ID/review"
-                      required
-                    />
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                      Tip: Get this link from your Google Business Profile manager under "Ask for reviews".
-                    </p>
-                  </div>
+                      <div className="form-group">
+                        <label className="form-label">Google Review URL</label>
+                        <input
+                          type="url"
+                          className="form-input"
+                          value={googleReviewUrl}
+                          onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                          placeholder="https://g.page/r/YOUR_BUSINESS_ID/review"
+                          required
+                        />
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                          Tip: Get this link from your Google Business Profile manager under "Ask for reviews".
+                        </p>
+                      </div>
 
-                  <div className="form-group">
-                    <label className="form-label">AI Prompt Context (Tell AI about your business)</label>
-                    <textarea
-                      className="form-textarea"
-                      value={context}
-                      onChange={(e) => setContext(e.target.value)}
-                      placeholder="Provide context like: Cozy Italian pizza shop famous for wood-fired pepperoni pizza, friendly service, and a beautiful outdoor patio. We want reviews to focus on friendly staff, fast service, and fresh ingredients."
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">SEO Keywords (Optional)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={keywords}
-                      onChange={(e) => setKeywords(e.target.value)}
-                      placeholder="e.g. best pizza in town, fresh ingredients, family friendly, affordable prices"
-                    />
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                      Comma-separated keywords the AI will naturally weave into reviews for better Google search visibility.
-                    </p>
-                  </div>
-
-                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label className="form-label">Business Logo</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
-                      {logoUrl ? (
-                        <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', overflow: 'hidden', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <img src={logoUrl} alt="Logo Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                        </div>
-                      ) : (
-                        <div style={{ width: '80px', height: '80px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-light)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
-                          <span>No Logo</span>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label className="btn btn-outline btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', margin: 0, width: 'fit-content' }}>
-                          <span>Choose File</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleLogoUpload}
-                            style={{ display: 'none' }}
-                          />
-                        </label>
-                        {logoUrl && (
-                          <button type="button" className="btn btn-outline btn-sm" onClick={handleRemoveLogo} style={{ color: 'var(--danger)', borderColor: 'var(--border-light)', width: 'fit-content' }}>
-                            Remove Logo
-                          </button>
-                        )}
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
-                          Max size 100KB. Squared image is recommended for best QR scannability.
+                      <div className="form-group">
+                        <label className="form-label">SEO Keywords (Optional)</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          value={keywords}
+                          onChange={(e) => setKeywords(e.target.value)}
+                          placeholder="e.g. best pizza in town, fresh ingredients, family friendly, affordable prices"
+                        />
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                          Comma-separated keywords the AI will naturally weave into reviews for better Google search visibility.
                         </p>
                       </div>
                     </div>
-                  </div>
 
-                  <button type="submit" className="btn btn-accent" disabled={isSubmitting} style={{ width: '100%' }}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} />
-                        Saving details...
-                      </>
-                    ) : 'Save & Generate Review QR'}
-                  </button>
+                    {/* Right Section: AI Context & Logo */}
+                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div>
+                        <div className="form-group">
+                          <label className="form-label">AI Prompt Context (Tell AI about your business)</label>
+                          <textarea
+                            className="form-textarea"
+                            value={context}
+                            onChange={(e) => setContext(e.target.value)}
+                            style={{ height: '140px' }}
+                            placeholder="Provide context like: Cozy Italian pizza shop famous for wood-fired pepperoni pizza, friendly service, and a beautiful outdoor patio. We want reviews to focus on friendly staff, fast service, and fresh ingredients."
+                            required
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                          <label className="form-label">Business Logo</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+                            {logoUrl ? (
+                              <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', overflow: 'hidden', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <img src={logoUrl} alt="Logo Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                              </div>
+                            ) : (
+                              <div style={{ width: '80px', height: '80px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-light)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+                                <span>No Logo</span>
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              <label className="btn btn-outline btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', margin: 0, width: 'fit-content' }}>
+                                <span>Choose File</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleLogoUpload}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                              {logoUrl && (
+                                <button type="button" className="btn btn-outline btn-sm" onClick={handleRemoveLogo} style={{ color: 'var(--danger)', borderColor: 'var(--border-light)', width: 'fit-content' }}>
+                                  Remove Logo
+                                </button>
+                              )}
+                              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+                                Max size 100KB. Squared image is recommended for best QR scannability.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button type="submit" className="btn btn-accent" disabled={isSubmitting} style={{ width: '100%', marginTop: 'auto' }}>
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} />
+                            Saving details...
+                          </>
+                        ) : 'Save & Generate Review QR'}
+                      </button>
+                    </div>
+                  </div>
                 </form>
               </div>
 
@@ -1260,7 +1271,6 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                       level="H"
                       fgColor={qrColor}
                       bgColor={qrBgColor}
-                      imageSettings={logoUrl ? { src: logoUrl, height: 40, width: 40, excavate: true } : undefined}
                     />
                   </div>
                   <div style={{ textAlign: 'center' }}>
@@ -1334,36 +1344,82 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                <div style={{ padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-secondary)' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Scans Today</span>
-                  <span style={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>{scansToday}</span>
-                </div>
-                <div style={{ padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-secondary)' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Total Reviews</span>
-                  <span style={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>{feedbacks.length}</span>
-                </div>
-              </div>
+              {(() => {
+                const displayedFeedbacks = feedbacks
+                  .filter(fb => {
+                    if (feedbackFilter === 'verified') return fb.isVerifiedOnGoogle;
+                    if (feedbackFilter === 'unverified') return !fb.isVerifiedOnGoogle;
+                    return true;
+                  })
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-              {feedbacks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
-                  <ThumbsUp size={36} style={{ strokeWidth: 1.5, marginBottom: '1rem', color: 'var(--text-tertiary)' }} />
-                  <p>No reviews received yet. Share your QR code to get started!</p>
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table className="feedback-table">
-                    <thead>
-                      <tr>
-                        <th>Date & Time</th>
-                        <th>Rating</th>
-                        <th>Review Details</th>
-                        <th>Verification</th>
-                        <th>Mobile Number</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {feedbacks.map((fb) => (
+                return (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+                      <div style={{ display: 'flex', gap: '1.5rem' }}>
+                        <div style={{ padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-secondary)' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Scans Today</span>
+                          <span style={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>{scansToday}</span>
+                        </div>
+                        <div style={{ padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-secondary)' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Total Reviews</span>
+                          <span style={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>{feedbacks.length}</span>
+                        </div>
+                      </div>
+
+                      {/* Filter buttons */}
+                      <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                        {[
+                          { key: 'verified', label: 'Verified' },
+                          { key: 'unverified', label: 'Unverified' },
+                          { key: 'all', label: 'All' }
+                        ].map((btn) => (
+                          <button
+                            key={btn.key}
+                            type="button"
+                            onClick={() => setFeedbackFilter(btn.key as any)}
+                            className="btn"
+                            style={{
+                              padding: '0.4rem 1rem',
+                              fontSize: '0.8125rem',
+                              borderRadius: 'var(--radius-sm)',
+                              background: feedbackFilter === btn.key ? 'var(--accent)' : 'transparent',
+                              color: feedbackFilter === btn.key ? '#fff' : 'var(--text-secondary)',
+                              border: 'none',
+                              boxShadow: 'none',
+                              fontWeight: feedbackFilter === btn.key ? 600 : 400,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {feedbacks.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+                        <ThumbsUp size={36} style={{ strokeWidth: 1.5, marginBottom: '1rem', color: 'var(--text-tertiary)' }} />
+                        <p>No reviews received yet. Share your QR code to get started!</p>
+                      </div>
+                    ) : displayedFeedbacks.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+                        <p>No {feedbackFilter} reviews found.</p>
+                      </div>
+                    ) : (
+                      <div className="table-container">
+                        <table className="feedback-table">
+                          <thead>
+                            <tr>
+                              <th>Date & Time</th>
+                              <th>Rating</th>
+                              <th>Review Details</th>
+                              <th>Verification</th>
+                              <th>Mobile Number</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {displayedFeedbacks.map((fb) => (
                         <tr key={fb._id || fb.id}>
                           <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                             <div style={{ fontSize: '0.875rem' }}>{new Date(fb.createdAt).toLocaleDateString()}</div>
@@ -1400,6 +1456,9 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                   </table>
                 </div>
               )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -2142,10 +2201,13 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   // Revenue state
   const [revenueData, setRevenueData] = useState<{ totalRevenue: number; activeSubscriptions: number; planCounts: any; monthlyRevenue: any[]; businessRevenue: any[] } | null>(null);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [subModal, setSubModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
+  const [subModal, setSubModal] = useState<{ show: boolean; bizId: string; bizName: string; regId?: string; isRenew?: boolean }>({ show: false, bizId: '', bizName: '' });
   const [subPlan, setSubPlan] = useState('yearly');
   const [subPaymentMethod, setSubPaymentMethod] = useState('UPI');
   const [subTxnId, setSubTxnId] = useState('');
+  const [revTimeframe, setRevTimeframe] = useState('month');
+  const [revStartDate, setRevStartDate] = useState('');
+  const [revEndDate, setRevEndDate] = useState('');
 
   // Stock reviews modal state
   const [stockModal, setStockModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
@@ -2166,6 +2228,23 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     fetchAdminData();
   }, []);
 
+  const fetchRevenueData = async (timeframe: string, start: string, end: string) => {
+    try {
+      let revUrl = `${API_BASE}/admin/revenue?timeframe=${timeframe}`;
+      if (timeframe === 'custom' && start && end) {
+        revUrl += `&startDate=${start}&endDate=${end}`;
+      }
+      const revRes = await fetch(revUrl, { credentials: 'include', headers: getAuthHeaders() });
+      if (revRes.ok) setRevenueData(await revRes.json());
+    } catch (err) {
+      console.error('Failed to load revenue data', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchRevenueData(revTimeframe, revStartDate, revEndDate);
+  }, [revTimeframe, revStartDate, revEndDate]);
+
   const fetchAdminData = async () => {
     setLoading(true);
     try {
@@ -2178,9 +2257,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       if (usersRes.ok) setUsers(await usersRes.json());
       if (regRes.ok) setRegistrations(await regRes.json());
 
-      const revRes = await fetch(`${API_BASE}/admin/revenue`, { credentials: 'include', headers: getAuthHeaders() });
       const subRes = await fetch(`${API_BASE}/admin/subscriptions`, { credentials: 'include', headers: getAuthHeaders() });
-      if (revRes.ok) setRevenueData(await revRes.json());
       if (subRes.ok) setSubscriptions(await subRes.json());
     } catch (err) {
       console.error('Failed to load admin data from API.', err);
@@ -2189,7 +2266,30 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     }
   };
 
+  const getPlanExpiryStatus = (biz: any) => {
+    if (!biz.plan || biz.plan === 'lifetime' || !biz.planExpiry) {
+      return { showRenew: false, isExpired: false, daysLeft: Infinity };
+    }
+    const expiryDate = new Date(biz.planExpiry);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiryDate.setHours(0, 0, 0, 0);
+    const diffTime = expiryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+      return { showRenew: true, isExpired: true, daysLeft: diffDays };
+    } else if (diffDays <= 7) {
+      return { showRenew: true, isExpired: false, daysLeft: diffDays };
+    }
+    return { showRenew: false, isExpired: false, daysLeft: diffDays };
+  };
+
   const handleToggleApprove = async (biz: any) => {
+    if (biz.isApproved) {
+      showToast('Once approved, approval status cannot be changed.');
+      return;
+    }
     try {
       const response = await fetch(`${API_BASE}/admin/business/${biz._id}/approve`, {
         method: 'PUT',
@@ -2200,15 +2300,14 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       if (response.ok) {
         const updated = await response.json();
         setBusinesses(prev => prev.map(b => b._id === updated._id ? updated : b));
-        showToast(`Business ${updated.isApproved ? 'Approved' : 'Suspended'}!`);
+        showToast(`Business Approved!`);
+      } else {
+        const errorData = await response.json();
+        showToast(errorData.error || 'Failed to approve.');
       }
     } catch (err) {
       console.error(err);
-      setBusinesses(prev => prev.map(b => {
-        if (b._id === biz._id) return { ...b, isApproved: !b.isApproved };
-        return b;
-      }));
-      showToast('Offline mode: Toggled approval status locally.');
+      showToast('Error connecting to server.');
     }
   };
 
@@ -2383,13 +2482,16 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   };
 
   // Registration handlers
-  const handleApproveRegistration = async (reg: any) => {
+  const handleApproveRegistration = async (regId: string, plan: string, paymentMethod: string, transactionId?: string) => {
     try {
-      const res = await fetch(`${API_BASE}/admin/registrations/${reg._id}/approve`, {
-        method: 'PUT', credentials: 'include', headers: getAuthHeaders()
+      const res = await fetch(`${API_BASE}/admin/registrations/${regId}/approve`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ plan, paymentMethod, transactionId })
       });
       if (res.ok) {
-        showToast(`Registration approved! Business created.`);
+        showToast(`Registration approved! Business created and plan activated.`);
         fetchAdminData();
       } else {
         const data = await res.json();
@@ -2418,12 +2520,18 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
   const handleSubscribe = async () => {
     try {
+      if (subModal.regId) {
+        await handleApproveRegistration(subModal.regId, subPlan, subPaymentMethod, subTxnId);
+        setSubModal({ show: false, bizId: '', bizName: '' });
+        setSubTxnId('');
+        return;
+      }
       const res = await fetch(`${API_BASE}/admin/subscribe`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include',
         body: JSON.stringify({ businessId: subModal.bizId, plan: subPlan, paymentMethod: subPaymentMethod, transactionId: subTxnId })
       });
       if (res.ok) {
-        showToast('Subscription activated!');
+        showToast(subModal.isRenew ? 'Subscription renewed successfully!' : 'Subscription activated!');
         setSubModal({ show: false, bizId: '', bizName: '' });
         setSubTxnId('');
         fetchAdminData();
@@ -2558,23 +2666,62 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                             {biz.plan === 'lifetime' ? 'No expiry' : `Exp: ${new Date(biz.planExpiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                           </span>
                         )}
+                        {(() => {
+                          const status = getPlanExpiryStatus(biz);
+                          if (!status.showRenew) return null;
+                          return (
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => setSubModal({ show: true, bizId: biz._id, bizName: biz.name, isRenew: true })}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                marginTop: '0.35rem',
+                                padding: '0.2rem 0.4rem',
+                                fontSize: '0.65rem',
+                                borderRadius: 'var(--radius-sm)',
+                                border: 'none',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                                backgroundColor: status.isExpired ? 'var(--success)' : 'var(--warning)',
+                                color: status.isExpired ? '#fff' : '#000',
+                              }}
+                            >
+                              Renew {status.isExpired ? '(Expired)' : ''}
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td>
-                        <button
-                          className={`btn ${biz.isApproved ? 'btn-secondary' : 'btn-accent'}`}
-                          onClick={() => handleToggleApprove(biz)}
-                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', minWidth: '100px' }}
-                        >
-                          {biz.isApproved ? (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--success)' }}>
-                              <CheckCircle size={12} /> Approved
-                            </span>
-                          ) : (
+                        {biz.isApproved ? (
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            color: 'var(--success)',
+                            border: '1px solid var(--border-light)',
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: '0.75rem',
+                            minWidth: '100px',
+                            justifyContent: 'center',
+                            backgroundColor: 'transparent'
+                          }}>
+                            <CheckCircle size={12} /> Approved
+                          </div>
+                        ) : (
+                          <button
+                            className="btn btn-accent"
+                            onClick={() => handleToggleApprove(biz)}
+                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', minWidth: '100px' }}
+                          >
                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                               <XCircle size={12} /> Pending
                             </span>
-                          )}
-                        </button>
+                          </button>
+                        )}
                       </td>
                       <td>
                         <button
@@ -2617,9 +2764,6 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                           <button className="btn btn-outline" onClick={() => handleDeleteBusiness(biz._id)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', color: 'var(--danger)' }} title="Delete Business">
                             <Trash2 size={12} />
                           </button>
-                          <button className="btn btn-accent" onClick={() => setSubModal({ show: true, bizId: biz._id, bizName: biz.name })} style={{ padding: '0.35rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.65rem' }} title="Assign Plan">
-                            ₹
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -2640,7 +2784,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             </button>
           </div>
 
-          {registrations.length === 0 ? (
+          {pendingRegistrations.length === 0 ? (
             <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>No registration requests yet.</p>
           ) : (
             <div className="table-container">
@@ -2656,7 +2800,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   </tr>
                 </thead>
                 <tbody>
-                  {registrations.map(reg => (
+                  {pendingRegistrations.map(reg => (
                     <tr key={reg._id}>
                       <td>
                         <strong style={{ display: 'block', fontSize: '0.9375rem' }}>{reg.name}</strong>
@@ -2686,9 +2830,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                       <td>
                         {reg.status === 'pending' && (
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button className="btn btn-accent" onClick={() => handleApproveRegistration(reg)}
+                            <button className="btn btn-accent" onClick={() => setSubModal({ show: true, bizId: '', bizName: reg.name, regId: reg._id })}
                               style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
-                              <CheckCircle size={12} /> Approve
+                              <CheckCircle size={12} /> Payment
                             </button>
                             <button className="btn btn-outline" onClick={() => handleRejectRegistration(reg)}
                               style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', color: 'var(--danger)' }}>
@@ -2714,91 +2858,102 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
           </p>
 
           <form onSubmit={handleRegisterOrUpdate}>
-            <div className="form-group">
-              <label className="form-label">Business Name</label>
-              <input type="text" className="form-input" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Luigi's Pizza Palace" required />
-            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+              {/* Left Column: Profile & Contact */}
+              <div>
+                <div className="form-group">
+                  <label className="form-label">Business Name</label>
+                  <input type="text" className="form-input" value={name} onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Luigi's Pizza Palace" required />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Business Category</label>
-              <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="Restaurant">Restaurant / Cafe</option>
-                <option value="Medical Clinic">Dental / Medical Clinic</option>
-                <option value="Auto Repair">Car Mechanic / Auto Repair</option>
-                <option value="Retail Store">Retail Shop / Boutique</option>
-                <option value="Hair Salon">Hair Salon / Spa</option>
-                <option value="Hotel">Hotel / Guesthouse</option>
-                <option value="Professional Services">Lawyer / Accountant / Agency</option>
-                <option value="Other">Other Service Business</option>
-              </select>
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Business Category</label>
+                  <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+                    <option value="Restaurant">Restaurant / Cafe</option>
+                    <option value="Medical Clinic">Dental / Medical Clinic</option>
+                    <option value="Auto Repair">Car Mechanic / Auto Repair</option>
+                    <option value="Retail Store">Retail Shop / Boutique</option>
+                    <option value="Hair Salon">Hair Salon / Spa</option>
+                    <option value="Hotel">Hotel / Guesthouse</option>
+                    <option value="Professional Services">Lawyer / Accountant / Agency</option>
+                    <option value="Other">Other Service Business</option>
+                  </select>
+                </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Location</label>
-                <input type="text" className="form-input" value={location} onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. 123 Main St, Mumbai" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Mobile Number</label>
-                <input type="tel" name="tel" autoComplete="tel" className="form-input" value={mobileNumber}
-                  onChange={(e) => { let d = e.target.value.replace(/\D/g, '').slice(0, 10); if (d.length > 5) d = `${d.slice(0, 5)} ${d.slice(5)}`; setMobileNumber(d); }}
-                  placeholder="XXXXX XXXXX" />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Google Review URL</label>
-              <input type="url" className="form-input" value={googleReviewUrl} onChange={(e) => setGoogleReviewUrl(e.target.value)}
-                placeholder="https://g.page/r/YOUR_BUSINESS_ID/review" required />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">AI Prompt Context (Tell AI about the business)</label>
-              <textarea className="form-textarea" value={context} onChange={(e) => setContext(e.target.value)}
-                placeholder="e.g. Cozy Italian pizza shop famous for wood-fired pizza and friendly staff." required />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">SEO Keywords (comma-separated)</label>
-              <input type="text" className="form-input" value={keywords} onChange={(e) => setKeywords(e.target.value)}
-                placeholder="e.g. best pizza mumbai, italian restaurant, wood fired pizza" />
-            </div>
-
-            {!editingId && (
-              <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
-                <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem' }}>MERCHANT ACCOUNT</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div className="form-group">
-                    <label className="form-label">Merchant Email</label>
-                    <input type="email" className="form-input" value={merchantEmail} onChange={(e) => setMerchantEmail(e.target.value)}
-                      placeholder="merchant@business.com" required />
+                    <label className="form-label">Location</label>
+                    <input type="text" className="form-input" value={location} onChange={(e) => setLocation(e.target.value)}
+                      placeholder="e.g. 123 Main St, Mumbai" />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Merchant Password</label>
-                    <input type="password" className="form-input" value={merchantPassword} onChange={(e) => setMerchantPassword(e.target.value)}
-                      placeholder="Min 6 characters" required minLength={6} />
+                    <label className="form-label">Mobile Number</label>
+                    <input type="tel" name="tel" autoComplete="tel" className="form-input" value={mobileNumber}
+                      onChange={(e) => { let d = e.target.value.replace(/\D/g, '').slice(0, 10); if (d.length > 5) d = `${d.slice(0, 5)} ${d.slice(5)}`; setMobileNumber(d); }}
+                      placeholder="XXXXX XXXXX" />
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Google Review URL</label>
+                  <input type="url" className="form-input" value={googleReviewUrl} onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                    placeholder="https://g.page/r/YOUR_BUSINESS_ID/review" required />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">SEO Keywords (comma-separated)</label>
+                  <input type="text" className="form-input" value={keywords} onChange={(e) => setKeywords(e.target.value)}
+                    placeholder="e.g. best pizza mumbai, italian restaurant, wood fired pizza" />
+                </div>
               </div>
-            )}
 
-            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '2rem 0' }}>
-              <input type="checkbox" id="isApproved" checked={isApproved} onChange={(e) => setIsApproved(e.target.checked)}
-                style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
-              <label htmlFor="isApproved" style={{ fontWeight: 500, fontSize: '0.9375rem', cursor: 'pointer' }}>
-                Approve and Activate this business portal immediately
-              </label>
-            </div>
+              {/* Right Column: AI Context & Account */}
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div className="form-group">
+                    <label className="form-label">AI Prompt Context (Tell AI about the business)</label>
+                    <textarea className="form-textarea" value={context} onChange={(e) => setContext(e.target.value)}
+                      style={{ height: '140px' }}
+                      placeholder="e.g. Cozy Italian pizza shop famous for wood-fired pizza and friendly staff." required />
+                  </div>
 
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button type="submit" className="btn btn-accent" style={{ flex: 1 }}>
-                {editingId ? 'Save Profile Changes' : 'Register & Setup Business'}
-              </button>
-              {editingId && (
-                <button type="button" className="btn btn-secondary" onClick={handleCancelEdit}>Cancel</button>
-              )}
+                  {!editingId && (
+                    <div style={{ borderTop: '1px solid var(--border-light)', marginTop: '1rem', paddingTop: '1rem' }}>
+                      <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>MERCHANT ACCOUNT</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">Merchant Email</label>
+                          <input type="email" className="form-input" value={merchantEmail} onChange={(e) => setMerchantEmail(e.target.value)}
+                            placeholder="merchant@business.com" required />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Merchant Password</label>
+                          <input type="password" className="form-input" value={merchantPassword} onChange={(e) => setMerchantPassword(e.target.value)}
+                            placeholder="Min 6 characters" required minLength={6} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                    <input type="checkbox" id="isApproved" checked={isApproved} onChange={(e) => setIsApproved(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                    <label htmlFor="isApproved" style={{ fontWeight: 500, fontSize: '0.9375rem', cursor: 'pointer' }}>
+                      Approve and Activate this business portal immediately
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto' }}>
+                  <button type="submit" className="btn btn-accent" style={{ flex: 1 }}>
+                    {editingId ? 'Save Profile Changes' : 'Register & Setup Business'}
+                  </button>
+                  {editingId && (
+                    <button type="button" className="btn btn-secondary" onClick={handleCancelEdit}>Cancel</button>
+                  )}
+                </div>
+              </div>
             </div>
           </form>
         </div>
@@ -2869,7 +3024,55 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
       {activeTab === 'revenue' && (
         <div className="card fade-in">
-          <h3 style={{ marginBottom: '1.5rem' }}>Revenue & Subscription Plans</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Revenue & Subscription Plans</h3>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                {['day', 'week', 'month', 'year', 'custom'].map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => setRevTimeframe(tf)}
+                    className="btn"
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.75rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: revTimeframe === tf ? 'var(--accent)' : 'transparent',
+                      color: revTimeframe === tf ? '#fff' : 'var(--text-secondary)',
+                      border: 'none',
+                      boxShadow: 'none',
+                      textTransform: 'capitalize',
+                      fontWeight: revTimeframe === tf ? 600 : 400
+                    }}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+
+              {revTimeframe === 'custom' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={revStartDate}
+                    onChange={(e) => setRevStartDate(e.target.value)}
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', margin: 0 }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>to</span>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={revEndDate}
+                    onChange={(e) => setRevEndDate(e.target.value)}
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', margin: 0 }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
           {revenueData && (
             <>
@@ -2893,7 +3096,13 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </div>
 
               <div style={{ marginBottom: '2rem' }}>
-                <h4 style={{ marginBottom: '1rem' }}>Monthly Revenue (Last 6 Months)</h4>
+                <h4 style={{ marginBottom: '1rem' }}>
+                  {revTimeframe === 'day' ? 'Hourly Revenue (Today)' :
+                   revTimeframe === 'week' ? 'Daily Revenue (Last 7 Days)' :
+                   revTimeframe === 'month' ? 'Weekly Revenue (Last 30 Days)' :
+                   revTimeframe === 'year' ? 'Monthly Revenue (Last 12 Months)' :
+                   'Revenue Breakdown (Custom Range)'}
+                </h4>
                 {revenueData.monthlyRevenue && revenueData.monthlyRevenue.length > 0 ? (
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={revenueData.monthlyRevenue}>
@@ -3064,11 +3273,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         </div>
       )}
 
-      <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
-        <button className="btn btn-outline btn-sm" onClick={() => navigateTo('/admin')} style={{ fontSize: '0.75rem' }}>
-          Go to Merchant view
-        </button>
-      </div>
+      <div style={{ marginTop: '2.5rem' }}></div>
 
       {/* Quick Edit Modal */}
       {editModal.show && editModal.biz && (
@@ -3131,7 +3336,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}
           onClick={(e) => { if (e.target === e.currentTarget) setSubModal({ show: false, bizId: '', bizName: '' }); }}>
           <div className="card fade-in" style={{ width: '100%', maxWidth: '440px', padding: '2rem' }}>
-            <h3 style={{ marginBottom: '1.5rem' }}>Assign Plan: {subModal.bizName}</h3>
+            <h3 style={{ marginBottom: '1.5rem' }}>
+              {subModal.regId ? 'Approve Registration & Payment:' : (subModal.isRenew ? 'Renew Plan:' : 'Assign Plan:')} {subModal.bizName}
+            </h3>
 
             <div className="form-group">
               <label className="form-label">Select Plan</label>
@@ -3159,7 +3366,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-              <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubscribe}>Activate Plan</button>
+              <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubscribe}>
+                {subModal.regId ? 'Approve & Activate' : (subModal.isRenew ? 'Renew Plan' : 'Activate Plan')}
+              </button>
               <button className="btn btn-secondary" onClick={() => setSubModal({ show: false, bizId: '', bizName: '' })}>Cancel</button>
             </div>
           </div>
