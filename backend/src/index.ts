@@ -23,6 +23,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback';
+const GOOGLE_PUBSUB_TOPIC = process.env.GOOGLE_PUBSUB_TOPIC || '';
 const expireExpiredSubscriptions = async () => {
   try {
     const now = new Date();
@@ -1232,6 +1233,47 @@ app.post('/api/business/:id/google/select-location', authMiddleware, requireRole
       googleLocationName
     }, { new: true });
 
+    if (business && business.googleRefreshToken && GOOGLE_PUBSUB_TOPIC) {
+      try {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID,
+            client_secret: GOOGLE_CLIENT_SECRET,
+            refresh_token: business.googleRefreshToken,
+            grant_type: 'refresh_token'
+          }).toString()
+        });
+
+        if (tokenRes.ok) {
+          const tokens = await tokenRes.json() as { access_token: string };
+          const accessToken = tokens.access_token;
+
+          const notifyRes = await fetch(`https://mybusinessnotifications.googleapis.com/v1/${googleAccountId}/notificationSetting?updateMask=pubsubTopic,notificationTypes`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              pubsubTopic: GOOGLE_PUBSUB_TOPIC,
+              notificationTypes: ['NEW_REVIEW']
+            })
+          });
+
+          if (!notifyRes.ok) {
+            const errText = await notifyRes.text();
+            console.error('Failed to configure Google Pub/Sub notifications:', errText);
+          } else {
+            console.log('Successfully configured Google Pub/Sub notifications for business location:', googleLocationId);
+          }
+        }
+      } catch (err) {
+        console.error('Error registering notification settings:', err);
+      }
+    }
+
     return res.status(200).json(business);
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
@@ -1338,6 +1380,93 @@ app.post('/api/business/:id/google/sync-reviews', authMiddleware, requireRole('m
   } catch (error) {
     console.error('Error syncing Google reviews:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 7. GCP Pub/Sub push notification webhook for real-time review verification
+app.post('/api/webhooks/google-pubsub', async (req: Request, res: Response) => {
+  try {
+    const message = req.body.message;
+    if (!message || !message.data) {
+      return res.status(400).send('Invalid Pub/Sub payload');
+    }
+
+    const decodedString = Buffer.from(message.data, 'base64').toString('utf-8');
+    const payload = JSON.parse(decodedString) as { locationName?: string; reviewName?: string; type?: string };
+
+    const locationName = payload.locationName || '';
+    const reviewName = payload.reviewName || '';
+
+    if (!locationName || !reviewName) {
+      return res.status(200).send('Event ignored: missing locationName or reviewName');
+    }
+
+    const business = await Business.findOne({ googleLocationId: locationName });
+    if (!business) {
+      return res.status(200).send('Event ignored: location not linked to any business');
+    }
+
+    if (!business.googleRefreshToken) {
+      return res.status(200).send('Event ignored: Google refresh token missing');
+    }
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        refresh_token: business.googleRefreshToken,
+        grant_type: 'refresh_token'
+      }).toString()
+    });
+
+    if (!tokenRes.ok) {
+      return res.status(400).send('Failed to refresh Google token');
+    }
+
+    const tokens = await tokenRes.json() as { access_token: string };
+    const accessToken = tokens.access_token;
+
+    const reviewRes = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${reviewName}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!reviewRes.ok) {
+      const errText = await reviewRes.text();
+      console.error('Failed to fetch Google review detail:', errText);
+      return res.status(400).send('Failed to fetch review detail');
+    }
+
+    const gRev = await reviewRes.json() as any;
+    const gText = gRev.comment || '';
+    const gRating = gRev.starRating === 'FIVE' ? 5 : gRev.starRating === 'FOUR' ? 4 : gRev.starRating === 'THREE' ? 3 : gRev.starRating === 'TWO' ? 2 : 1;
+    const gAuthor = gRev.reviewer?.displayName || 'Anonymous';
+    const gReviewId = gRev.reviewId;
+    const gCreateTime = new Date(gRev.createTime);
+
+    if (gText) {
+      const localFeedbacks = await Feedback.find({ businessId: business._id, isVerifiedOnGoogle: false });
+      for (const localFb of localFeedbacks) {
+        const textSim = calculateSimilarity(gText, localFb.feedbackText);
+        const timeDiff = Math.abs(gCreateTime.getTime() - localFb.createdAt.getTime());
+        const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+        if (textSim >= 0.7 && gRating === localFb.rating && hoursDiff <= 24) {
+          localFb.isVerifiedOnGoogle = true;
+          localFb.googleReviewId = gReviewId;
+          localFb.googleReviewAuthorName = gAuthor;
+          await localFb.save();
+          console.log(`Successfully verified review via Pub/Sub for business: ${business.name}, Author: ${gAuthor}`);
+          break;
+        }
+      }
+    }
+
+    return res.status(200).send('OK');
+  } catch (error) {
+    console.error('Error in Pub/Sub Webhook:', error);
+    return res.status(500).send('Internal Server Error');
   }
 });
 
