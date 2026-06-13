@@ -19,6 +19,21 @@ const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-google-reviews';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+const expireExpiredSubscriptions = async () => {
+  try {
+    const now = new Date();
+    await Subscription.updateMany(
+      { status: 'active', endDate: { $ne: null, $lt: now } },
+      { $set: { status: 'expired' } }
+    );
+    await Business.updateMany(
+      { plan: { $ne: 'lifetime' }, planExpiry: { $ne: null, $lt: now }, isActive: true },
+      { $set: { isActive: false } }
+    );
+  } catch (err) {
+    console.error('Error running expiration checks:', err);
+  }
+};
 
 // Middlewares
 const allowedOrigins = [
@@ -70,6 +85,9 @@ mongoose.connect(MONGODB_URI)
       },
       { $set: { status: 'active' } }
     );
+
+    // Run expiration check on startup
+    await expireExpiredSubscriptions();
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -963,6 +981,7 @@ app.put('/api/admin/business/:id/toggle-active', authMiddleware, requireRole('ad
 
 app.get('/api/admin/subscriptions', authMiddleware, requireRole('admin'), async (_req: Request, res: Response) => {
   try {
+    await expireExpiredSubscriptions();
     const subs = await Subscription.find().populate('businessId', 'name').sort({ createdAt: -1 });
     return res.status(200).json(subs);
   } catch (error) {
@@ -972,7 +991,8 @@ app.get('/api/admin/subscriptions', authMiddleware, requireRole('admin'), async 
 
 app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req: Request, res: Response) => {
   try {
-    const subs = await Subscription.find({ status: 'active' }).populate('businessId', 'name plan planStartDate planExpiry isActive');
+    await expireExpiredSubscriptions();
+    const subs = await Subscription.find().populate('businessId', 'name plan planStartDate planExpiry isActive');
     const totalRevenue = subs.reduce((sum, s) => sum + s.amount, 0);
 
     const monthlyRevenue: { month: string; revenue: number }[] = [];
@@ -1002,7 +1022,7 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req:
 
     return res.status(200).json({
       totalRevenue,
-      activeSubscriptions: subs.length,
+      activeSubscriptions: subs.filter(s => s.status === 'active').length,
       planCounts,
       monthlyRevenue,
       businessRevenue

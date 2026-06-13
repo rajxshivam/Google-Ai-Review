@@ -2446,24 +2446,41 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                         </span>
                       </td>
                       <td>
-                        <button
-                          className={`btn btn-sm ${sub.status === 'active' ? 'btn-danger' : 'btn-accent'}`}
-                          onClick={async () => {
-                            if (!sub.businessId?._id) return;
-                            try {
-                              const res = await fetch(`${API_BASE}/admin/business/${sub.businessId._id}/toggle-active`, {
-                                method: 'PUT', headers: getAuthHeaders(), credentials: 'include'
+                        {sub.status === 'expired' ? (
+                          <button
+                            className="btn btn-sm btn-accent"
+                            onClick={() => {
+                              if (!sub.businessId?._id) return;
+                              setSubModal({
+                                show: true,
+                                bizId: sub.businessId._id,
+                                bizName: sub.businessId.name || 'Unknown'
                               });
-                              if (res.ok) {
-                                showToast(sub.status === 'active' ? 'Access revoked' : 'Access restored');
-                                fetchAdminData();
-                              }
-                            } catch { showToast('Error toggling access.'); }
-                          }}
-                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                        >
-                          {sub.status === 'active' ? 'Revoke' : 'Restore'}
-                        </button>
+                            }}
+                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                          >
+                            Renew
+                          </button>
+                        ) : (
+                          <button
+                            className={`btn btn-sm ${sub.status === 'active' ? 'btn-danger' : 'btn-accent'}`}
+                            onClick={async () => {
+                              if (!sub.businessId?._id) return;
+                              try {
+                                const res = await fetch(`${API_BASE}/admin/business/${sub.businessId._id}/toggle-active`, {
+                                  method: 'PUT', headers: getAuthHeaders(), credentials: 'include'
+                                });
+                                if (res.ok) {
+                                  showToast(sub.status === 'active' ? 'Access revoked' : 'Access restored');
+                                  fetchAdminData();
+                                }
+                              } catch { showToast('Error toggling access.'); }
+                            }}
+                            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                          >
+                            {sub.status === 'active' ? 'Revoke' : 'Restore'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
