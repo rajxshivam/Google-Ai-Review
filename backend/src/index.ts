@@ -799,7 +799,7 @@ app.put('/api/business/:id/qr-settings', async (req: Request, res: Response) => 
 // SUBSCRIPTION & REVENUE (Admin)
 // ==========================================
 
-const PLAN_PRICES: Record<string, number> = { yearly: 4999, lifetime: 9999 };
+const PLAN_PRICES: Record<string, number> = { yearly: 999, lifetime: 1499 };
 
 app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
@@ -882,7 +882,7 @@ app.get('/api/admin/subscriptions', authMiddleware, requireRole('admin'), async 
 
 app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req: Request, res: Response) => {
   try {
-    const subs = await Subscription.find({ status: 'active' });
+    const subs = await Subscription.find({ status: 'active' }).populate('businessId', 'name plan planStartDate planExpiry isActive');
     const totalRevenue = subs.reduce((sum, s) => sum + s.amount, 0);
 
     const monthlyRevenue: { month: string; revenue: number }[] = [];
@@ -901,11 +901,21 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req:
     const businesses = await Business.find();
     businesses.forEach(b => { planCounts[b.plan as keyof typeof planCounts]++; });
 
+    const businessRevenue = subs.map(s => ({
+      businessName: (s.businessId as any)?.name || 'Unknown',
+      plan: s.plan,
+      amount: s.amount,
+      activatedAt: s.startDate,
+      expiresAt: s.endDate,
+      isActive: (s.businessId as any)?.isActive ?? false
+    }));
+
     return res.status(200).json({
       totalRevenue,
       activeSubscriptions: subs.length,
       planCounts,
-      monthlyRevenue
+      monthlyRevenue,
+      businessRevenue
     });
   } catch (error) {
     console.error('Error fetching revenue:', error);

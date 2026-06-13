@@ -1666,7 +1666,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const [editForm, setEditForm] = useState({ name: '', category: '', context: '', googleReviewUrl: '', keywords: '', location: '', mobileNumber: '' });
 
   // Revenue state
-  const [revenueData, setRevenueData] = useState<{ totalRevenue: number; activeSubscriptions: number; planCounts: any; monthlyRevenue: any[] } | null>(null);
+  const [revenueData, setRevenueData] = useState<{ totalRevenue: number; activeSubscriptions: number; planCounts: any; monthlyRevenue: any[]; businessRevenue: any[] } | null>(null);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [subModal, setSubModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
   const [subPlan, setSubPlan] = useState('yearly');
@@ -2345,6 +2345,52 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             </>
           )}
 
+          {revenueData?.businessRevenue && revenueData.businessRevenue.length > 0 && (
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ marginBottom: '1rem' }}>Revenue by Business</h4>
+              <div className="table-container">
+                <table className="feedback-table">
+                  <thead>
+                    <tr>
+                      <th>Business</th>
+                      <th>Plan</th>
+                      <th>Amount</th>
+                      <th>Activated</th>
+                      <th>Expires</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(revenueData?.businessRevenue || []).map((br: any, i: number) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 600 }}>{br.businessName}</td>
+                        <td>
+                          <span className="copy-badge" style={{
+                            backgroundColor: br.plan === 'lifetime' ? 'var(--warning)' : 'var(--accent)',
+                            color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', textTransform: 'uppercase'
+                          }}>
+                            {br.plan}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>₹{br.amount.toLocaleString('en-IN')}</td>
+                        <td style={{ fontSize: '0.8125rem' }}>{br.activatedAt ? new Date(br.activatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                        <td style={{ fontSize: '0.8125rem' }}>{br.plan === 'lifetime' ? 'Never' : br.expiresAt ? new Date(br.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                        <td>
+                          <span className="copy-badge" style={{
+                            backgroundColor: br.isActive ? 'var(--success)' : 'var(--danger)',
+                            color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem'
+                          }}>
+                            {br.isActive ? 'Active' : 'Revoked'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h4>Subscription History</h4>
             <button className="btn btn-outline btn-sm" onClick={fetchAdminData} disabled={loading}>
@@ -2371,16 +2417,15 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                 <tbody>
                   {subscriptions.map(sub => (
                     <tr key={sub._id}>
-                      <td style={{ fontWeight: 600 }}>{sub.businessId?.name || 'Unknown'}</td>
+                        <td style={{ fontWeight: 600 }}>{sub.businessId?.name || 'Unknown'}</td>
                       <td>
                         <span className="copy-badge" style={{
                           backgroundColor: sub.plan === 'lifetime' ? 'var(--warning)' : 'var(--accent)',
                           color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', textTransform: 'uppercase'
                         }}>
-                          {sub.plan}
+                          {sub.plan} — ₹{sub.amount.toLocaleString('en-IN')}
                         </span>
                       </td>
-                      <td>₹{sub.amount.toLocaleString('en-IN')}</td>
                       <td style={{ fontSize: '0.8125rem' }}>{sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
                       <td style={{ fontSize: '0.8125rem' }}>{sub.plan === 'lifetime' ? 'Never' : sub.endDate ? new Date(sub.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
                       <td>
@@ -2423,12 +2468,12 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
               <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '2px solid var(--accent)' }}>
                 <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--accent)' }}>Yearly</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹4,999<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/yr</span></p>
+                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹999<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/yr</span></p>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Valid for 1 year from activation</p>
               </div>
               <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '2px solid var(--warning)' }}>
                 <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--warning)' }}>Lifetime</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹9,999</p>
+                <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹1,499</p>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>One-time payment, no expiry</p>
               </div>
             </div>
@@ -2508,8 +2553,8 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             <div className="form-group">
               <label className="form-label">Select Plan</label>
               <select className="form-select" value={subPlan} onChange={(e) => setSubPlan(e.target.value)}>
-                <option value="yearly">Yearly (₹4,999/yr)</option>
-                <option value="lifetime">Lifetime (₹9,999 one-time)</option>
+                <option value="yearly">Yearly (₹999/yr)</option>
+                <option value="lifetime">Lifetime (₹1,499 one-time)</option>
               </select>
             </div>
 
