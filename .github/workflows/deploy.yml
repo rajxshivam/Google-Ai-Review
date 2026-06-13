@@ -61,7 +61,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            cd /opt/ai-reviews
+            cd /home/Google-Ai-Review
+            git pull origin main
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f

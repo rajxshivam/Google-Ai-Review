@@ -19,13 +19,13 @@ if ! docker compose version &> /dev/null; then
 fi
 
 # Create app directory
-sudo mkdir -p /opt/ai-reviews
-sudo chown $USER:$USER /opt/ai-reviews
+sudo mkdir -p /home/ai-reviews
+sudo chown $USER:$USER /home/ai-reviews
 
 # Create .env if it doesn't exist
-if [ ! -f /opt/ai-reviews/.env ]; then
+if [ ! -f /home/ai-reviews/.env ]; then
     echo "Creating .env from template..."
-    cat > /opt/ai-reviews/.env << 'ENVFILE'
+    cat > /home/ai-reviews/.env << 'ENVFILE'
 # MongoDB
 MONGO_USER=admin
 MONGO_PASSWORD=CHANGE_ME_NOW
@@ -40,12 +40,12 @@ JWT_SECRET=CHANGE_ME_TO_RANDOM_64_CHARS
 # Docker Hub (set by CI/CD, or manually for local builds)
 DOCKERHUB_USERNAME=rajxshivam
 ENVFILE
-    echo ">>> EDIT /opt/ai-reviews/.env WITH YOUR SECRETS <<<"
+    echo ">>> EDIT /home/ai-reviews/.env WITH YOUR SECRETS <<<"
 fi
 
 # Copy docker-compose if not present
-if [ ! -f /opt/ai-reviews/docker-compose.yml ]; then
-    echo "docker-compose.yml not found at /opt/ai-reviews/"
+if [ ! -f /home/ai-reviews/docker-compose.yml ]; then
+    echo "docker-compose.yml not found at /home/ai-reviews/"
     echo "Clone the repo or copy docker-compose.yml there."
 fi
 
@@ -64,6 +64,6 @@ sudo systemctl start docker
 
 echo ""
 echo "=== Setup Complete ==="
-echo "1. Edit /opt/ai-reviews/.env with your secrets"
-echo "2. cd /opt/ai-reviews && docker compose up -d --build"
+echo "1. Edit /home/ai-reviews/.env with your secrets"
+echo "2. cd /home/ai-reviews && docker compose up -d --build"
 echo ""

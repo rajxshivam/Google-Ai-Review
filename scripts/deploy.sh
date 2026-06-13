@@ -2,7 +2,7 @@
 set -e
 
 echo "=== Deploying AI Reviews ==="
-cd /opt/ai-reviews
+cd /home/Google-Ai-Review
 
 # Pull latest images
 docker compose pull
