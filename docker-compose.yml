@@ -15,6 +15,7 @@ services:
       - app-network
 
   backend:
+    image: ${DOCKERHUB_USERNAME:-rajxshivam}/ai-reviews-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -34,6 +35,7 @@ services:
       - app-network
 
   frontend:
+    image: ${DOCKERHUB_USERNAME:-rajxshivam}/ai-reviews-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
