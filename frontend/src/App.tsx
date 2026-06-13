@@ -23,7 +23,9 @@ import {
   XCircle,
   Edit2,
   Trash2,
-  BarChart3
+  BarChart3,
+  Menu,
+  X
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
@@ -81,7 +83,7 @@ function LoginPage({ login, showToast, user, navigateTo }: LoginPageProps) {
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
             <Sparkles size={28} color="var(--accent)" />
-            <h1 style={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.025em' }}><span style={{ color: 'var(--accent)' }}>AI</span> Reviews</h1>
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.025em' }}><span style={{ color: 'var(--accent)' }}>Review Our</span> Business</h1>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Sign in to your account</p>
         </div>
@@ -195,7 +197,7 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
             <Sparkles size={28} color="var(--accent)" />
-            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span style={{ color: 'var(--accent)' }}>AI</span> Reviews</h1>
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span style={{ color: 'var(--accent)' }}>Review Our</span> Business</h1>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Register your business</p>
         </div>
@@ -442,6 +444,7 @@ interface AdminDashboardProps {
 
 function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'qr' | 'feedbacks' | 'analytics' | 'reports'>('overview');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [businessId, setBusinessId] = useState<string>(() => localStorage.getItem('review_biz_id') || '');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Restaurant');
@@ -889,33 +892,47 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
       </div>
 
       <div className="merchant-layout">
+        {/* Mobile Header */}
+        <div className="mobile-header">
+          <div className="mobile-header-logo" onClick={() => navigateTo('/admin')}>
+            <Sparkles size={20} />
+            <span>Review Our</span> Business
+          </div>
+          <button className="mobile-menu-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle Menu">
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+
+        {/* Backdrop for mobile drawer */}
+        {isMobileMenuOpen && <div className="sidebar-backdrop" onClick={() => setIsMobileMenuOpen(false)} />}
+
         {/* Sidebar */}
-        <aside className="merchant-sidebar">
-          <div className="sidebar-logo" onClick={() => navigateTo('/admin')}>
+        <aside className={`merchant-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+          <div className="sidebar-logo" onClick={() => { navigateTo('/admin'); setIsMobileMenuOpen(false); }}>
             <Sparkles size={22} />
-            <span>AI</span> Reviews
+            <span>Review Our</span> Business
           </div>
           <div className="sidebar-header">
             <h3>{name || 'Your Business'}</h3>
             <p>{category}</p>
           </div>
           <nav className="sidebar-nav">
-            <button className={activeTab === 'overview' ? 'active' : ''} onClick={() => setActiveTab('overview')}>
+            <button className={activeTab === 'overview' ? 'active' : ''} onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }}>
               <Sparkles size={16} /> Overview
             </button>
-            <button className={activeTab === 'profile' ? 'active' : ''} onClick={() => setActiveTab('profile')}>
+            <button className={activeTab === 'profile' ? 'active' : ''} onClick={() => { setActiveTab('profile'); setIsMobileMenuOpen(false); }}>
               <Settings size={16} /> Business Profile
             </button>
-            <button className={activeTab === 'qr' ? 'active' : ''} onClick={() => setActiveTab('qr')}>
+            <button className={activeTab === 'qr' ? 'active' : ''} onClick={() => { setActiveTab('qr'); setIsMobileMenuOpen(false); }}>
               <QrCode size={16} /> Review QR Code
             </button>
-            <button className={activeTab === 'feedbacks' ? 'active' : ''} onClick={() => setActiveTab('feedbacks')}>
+            <button className={activeTab === 'feedbacks' ? 'active' : ''} onClick={() => { setActiveTab('feedbacks'); setIsMobileMenuOpen(false); }}>
               <MessageSquare size={16} /> Customer Reviews
             </button>
-            <button className={activeTab === 'analytics' ? 'active' : ''} onClick={() => setActiveTab('analytics')}>
+            <button className={activeTab === 'analytics' ? 'active' : ''} onClick={() => { setActiveTab('analytics'); setIsMobileMenuOpen(false); }}>
               <BarChart3 size={16} /> Analytics
             </button>
-            <button className={activeTab === 'reports' ? 'active' : ''} onClick={() => setActiveTab('reports')}>
+            <button className={activeTab === 'reports' ? 'active' : ''} onClick={() => { setActiveTab('reports'); setIsMobileMenuOpen(false); }}>
               <Download size={16} /> Reports
             </button>
           </nav>
@@ -930,7 +947,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
             </div>
             <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-light)' }}>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
-              <button className="btn btn-outline btn-sm" onClick={logout} style={{ width: '100%', fontSize: '0.8125rem' }}>
+              <button className="btn btn-outline btn-sm" onClick={() => { logout(); setIsMobileMenuOpen(false); }} style={{ width: '100%', fontSize: '0.8125rem' }}>
                 <Lock size={14} /> Logout
               </button>
             </div>
@@ -1011,7 +1028,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                   <Settings size={20} color="var(--accent)" /> Configure Business Settings
                 </h2>
                 <form onSubmit={handleSaveProfile}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+                  <div className="form-grid-2-section">
                     {/* Left Section: Profile Details */}
                     <div>
                       <div className="form-group">
@@ -2180,6 +2197,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'businesses' | 'registrations' | 'feedbacks' | 'add' | 'revenue'>('businesses');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Form state for add/edit business
   const [name, setName] = useState('');
@@ -2549,9 +2567,11 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       <header className="app-header">
         <div className="app-logo" onClick={() => navigateTo('/admin')}>
           <Sparkles size={24} />
-          <span>AI</span> Reviews
+          <span>Review Our</span> Business
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+
+        {/* Desktop Header User Info */}
+        <div className="desktop-header-user" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{user.email}</span>
           <button className="btn btn-outline" onClick={logout} style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
             Logout
@@ -2560,10 +2580,58 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             <Shield size={16} /> Super Admin
           </div>
         </div>
+
+        {/* Mobile Hamburger Toggle */}
+        <button className="mobile-menu-toggle super-admin-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle Menu">
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </header>
 
+      {/* Backdrop for Super Admin mobile menu */}
+      {isMobileMenuOpen && <div className="sidebar-backdrop" onClick={() => setIsMobileMenuOpen(false)} />}
+
+      {/* Super Admin Mobile Drawer */}
+      <aside className={`super-admin-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <div className="sidebar-logo" onClick={() => { navigateTo('/admin'); setIsMobileMenuOpen(false); }}>
+          <Sparkles size={22} />
+          <span>Review Our</span> Business
+        </div>
+        <div className="sidebar-header">
+          <div className="copy-badge" style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', display: 'inline-flex', width: 'fit-content' }}>
+            <Shield size={14} style={{ marginRight: '4px' }} /> Super Admin
+          </div>
+        </div>
+        <nav className="sidebar-nav">
+          <button className={activeTab === 'businesses' ? 'active' : ''} onClick={() => { setActiveTab('businesses'); setIsMobileMenuOpen(false); }}>
+            <Users size={16} style={{ marginRight: '6px' }} /> Partner Businesses
+          </button>
+          <button className={activeTab === 'registrations' ? 'active' : ''} onClick={() => { setActiveTab('registrations'); setIsMobileMenuOpen(false); }}>
+            <AlertCircle size={16} style={{ marginRight: '6px' }} />
+            Registrations {pendingRegistrations.length > 0 && <span className="copy-badge" style={{ marginLeft: '6px', fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>{pendingRegistrations.length}</span>}
+          </button>
+          <button className={activeTab === 'add' ? 'active' : ''} onClick={() => { setActiveTab('add'); setIsMobileMenuOpen(false); }}>
+            <Settings size={16} style={{ marginRight: '6px' }} />
+            {editingId ? 'Edit Business Details' : 'Register New Business'}
+          </button>
+          <button className={activeTab === 'feedbacks' ? 'active' : ''} onClick={() => { setActiveTab('feedbacks'); setIsMobileMenuOpen(false); }}>
+            <MessageSquare size={16} style={{ marginRight: '6px' }} /> System-Wide Feedbacks
+          </button>
+          <button className={activeTab === 'revenue' ? 'active' : ''} onClick={() => { setActiveTab('revenue'); setIsMobileMenuOpen(false); }}>
+            <BarChart3 size={16} style={{ marginRight: '6px' }} /> Revenue & Plans
+          </button>
+        </nav>
+        <div className="sidebar-bottom">
+          <div style={{ paddingTop: '0.5rem', borderTop: '1px solid var(--border-light)' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+            <button className="btn btn-outline btn-sm" onClick={() => { logout(); setIsMobileMenuOpen(false); }} style={{ width: '100%', fontSize: '0.8125rem' }}>
+              <Lock size={14} /> Logout
+            </button>
+          </div>
+        </div>
+      </aside>
+
       {/* Metrics Row */}
-      <div className="grid-2" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div className="stats-grid">
         <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
           <Users size={24} color="var(--accent)" style={{ marginBottom: '0.5rem' }} />
           <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>TOTAL PARTNERS</p>
@@ -2858,7 +2926,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
           </p>
 
           <form onSubmit={handleRegisterOrUpdate}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+            <div className="form-grid-2-section">
               {/* Left Column: Profile & Contact */}
               <div>
                 <div className="form-group">
@@ -3076,7 +3144,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
           {revenueData && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
+              <div className="revenue-stats-grid">
                 <div className="card" style={{ padding: '1.5rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>TOTAL REVENUE</p>
                   <h2 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--success)' }}>₹{revenueData.totalRevenue.toLocaleString('en-IN')}</h2>
@@ -3257,7 +3325,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
           <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem' }}>
             <h4 style={{ marginBottom: '1rem' }}>Plan Pricing</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div className="pricing-grid">
               <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '2px solid var(--accent)' }}>
                 <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: 'var(--accent)' }}>Yearly</p>
                 <p style={{ fontSize: '1.5rem', fontWeight: 700 }}>₹999<span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/yr</span></p>
@@ -3394,7 +3462,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto', flex: 1, paddingRight: '0.5rem' }}>
                 
                 {/* Stock Counts Summary */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                <div className="stock-summary-grid" style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
                   {[5, 4, 3, 2].map(rating => (
                     <div key={rating} style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '2px', color: 'var(--warning)', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.25rem' }}>

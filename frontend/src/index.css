@@ -777,33 +777,274 @@ body {
   padding: 1.5rem 2rem;
 }
 
+/* Mobile and Sidebar menu drawer defaults for desktop */
+.mobile-header {
+  display: none;
+}
+
+.super-admin-sidebar {
+  display: none;
+}
+
+.super-admin-toggle {
+  display: none;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.revenue-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.stock-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.form-grid-2-section {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
 @media (max-width: 900px) {
   .merchant-layout {
     flex-direction: column;
+    min-height: 100vh;
   }
-  .merchant-sidebar {
-    width: 100%;
-    height: auto;
-    position: static;
-    border-right: none;
+  
+  /* Mobile Header */
+  .mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-primary);
     border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
-  .merchant-sidebar .sidebar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+
+  .mobile-header-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    cursor: pointer;
   }
-  .merchant-sidebar .sidebar-nav button {
-    flex: 1;
-    min-width: fit-content;
+
+  .mobile-header-logo span {
+    color: var(--accent);
+  }
+
+  .mobile-menu-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
     justify-content: center;
+    padding: 0.25rem;
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast);
   }
+
+  .mobile-menu-toggle:hover {
+    background-color: var(--bg-secondary);
+  }
+
+  .super-admin-toggle {
+    display: flex;
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 998;
+    animation: fadeIn 200ms ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Merchant Sidebar Drawer */
+  .merchant-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 999;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    border-right: 1px solid var(--border-light);
+  }
+
+  .merchant-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .merchant-sidebar .sidebar-nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.125rem;
+  }
+
+  .merchant-sidebar .sidebar-nav button {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
   .merchant-sidebar .sidebar-bottom {
-    flex-direction: row;
-    justify-content: space-around;
-    border-top: none;
+    flex-direction: column;
+    border-top: 1px solid var(--border-light);
+    border-bottom: none;
+    padding: 0.75rem 1.25rem;
+  }
+
+  /* Super Admin Sidebar Drawer */
+  .super-admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 999;
+    background-color: var(--bg-primary);
+    border-right: 1px solid var(--border-light);
+    transform: translateX(-100%);
+    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  }
+
+  .super-admin-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .super-admin-sidebar .sidebar-logo {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+  }
+
+  .super-admin-sidebar .sidebar-logo span {
+    color: var(--accent);
+  }
+
+  .super-admin-sidebar .sidebar-header {
+    padding: 0.75rem 1.25rem;
     border-bottom: 1px solid var(--border-light);
   }
+
+  .super-admin-sidebar .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: 0.5rem;
+    flex: 1;
+  }
+
+  .super-admin-sidebar .sidebar-nav button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: left;
+    font-family: var(--font-sans);
+  }
+
+  .super-admin-sidebar .sidebar-nav button:hover {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .super-admin-sidebar .sidebar-nav button.active {
+    background-color: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .super-admin-sidebar .sidebar-bottom {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Desktop elements to hide on mobile */
+  .desktop-header-user,
+  .tabs {
+    display: none !important;
+  }
+
+  .app-header {
+    margin-bottom: 1rem !important;
+  }
+
+  /* Metrics Grids */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 1rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .revenue-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .form-grid-2-section {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
+
   .merchant-content {
     padding: 1rem;
   }
@@ -841,5 +1082,19 @@ body {
   .feedback-table th,
   .feedback-table td {
     padding: 0.625rem 0.5rem;
+  }
+
+  /* Responsive collapses for small mobile screens */
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+  
+  .pricing-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stock-summary-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
