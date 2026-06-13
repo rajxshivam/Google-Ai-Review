@@ -19,6 +19,10 @@ const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-google-reviews';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback';
 const expireExpiredSubscriptions = async () => {
   try {
     const now = new Date();
@@ -33,6 +37,17 @@ const expireExpiredSubscriptions = async () => {
   } catch (err) {
     console.error('Error running expiration checks:', err);
   }
+};
+
+const calculateSimilarity = (str1: string, str2: string): number => {
+  if (!str1 || !str2) return 0;
+  const clean = (s: string) => s.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, '').split(/\s+/).filter(Boolean);
+  const s1 = new Set(clean(str1));
+  const s2 = new Set(clean(str2));
+  if (s1.size === 0 || s2.size === 0) return 0;
+  const intersection = new Set([...s1].filter(x => s2.has(x)));
+  const union = new Set([...s1, ...s2]);
+  return intersection.size / union.size;
 };
 
 // Middlewares
@@ -1061,6 +1076,267 @@ app.put('/api/business/:id/profile', authMiddleware, requireRole('merchant'), as
     return res.status(200).json(business);
   } catch (error) {
     console.error('Error updating merchant profile:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ==========================================
+// GOOGLE BUSINESS PROFILE INTEGRATION
+// ==========================================
+
+// 1. Redirect to Google OAuth screen
+app.get('/api/auth/google', (req: Request, res: Response) => {
+  const { businessId } = req.query;
+  if (!businessId) {
+    return res.status(400).send('businessId query parameter is required.');
+  }
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/business.manage');
+  const redirectUri = encodeURIComponent(GOOGLE_REDIRECT_URI);
+  const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scope}&access_type=offline&prompt=consent&state=${businessId}`;
+  return res.redirect(oauthUrl);
+});
+
+// 2. Google OAuth callback handler
+app.get('/api/auth/google/callback', async (req: Request, res: Response) => {
+  const { code, state: businessId } = req.query;
+  if (!code || !businessId) {
+    return res.status(400).send('Missing authorization code or state (businessId).');
+  }
+
+  try {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: code as string,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        grant_type: 'authorization_code'
+      }).toString()
+    });
+
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      console.error('Failed to exchange Google OAuth code:', errText);
+      return res.status(500).send('Error exchanging OAuth code.');
+    }
+
+    const tokens = await tokenRes.json() as { refresh_token?: string; access_token: string };
+    
+    const updateData: any = {};
+    if (tokens.refresh_token) {
+      updateData.googleRefreshToken = tokens.refresh_token;
+    }
+
+    await Business.findByIdAndUpdate(businessId, updateData);
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return res.redirect(`${frontendUrl}/admin?google_oauth_success=true`);
+  } catch (error) {
+    console.error('Error in Google OAuth callback:', error);
+    return res.status(500).send('Internal Server Error');
+  }
+});
+
+// 3. Get connected account's locations
+app.get('/api/business/:id/google/locations', authMiddleware, requireRole('merchant', 'admin'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const business = await Business.findById(id);
+    if (!business || !business.googleRefreshToken) {
+      return res.status(400).json({ error: 'Google Account not connected.' });
+    }
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        refresh_token: business.googleRefreshToken,
+        grant_type: 'refresh_token'
+      }).toString()
+    });
+
+    if (!tokenRes.ok) {
+      return res.status(400).json({ error: 'Failed to refresh Google access token. Please reconnect.' });
+    }
+
+    const tokens = await tokenRes.json() as { access_token: string };
+    const accessToken = tokens.access_token;
+
+    const accountsRes = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!accountsRes.ok) {
+      return res.status(400).json({ error: 'Failed to fetch Google accounts.' });
+    }
+
+    const accountsData = await accountsRes.json() as { accounts?: { name: string; accountName: string; type: string }[] };
+    const accounts = accountsData.accounts || [];
+    if (accounts.length === 0) {
+      return res.status(200).json({ locations: [] });
+    }
+
+    const locationsList: any[] = [];
+    for (const account of accounts) {
+      const locationsRes = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title,storefrontAddress`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      if (locationsRes.ok) {
+        const locData = await locationsRes.json() as { locations?: { name: string; title: string; storefrontAddress: any }[] };
+        const locations = locData.locations || [];
+        for (const loc of locations) {
+          locationsList.push({
+            googleAccountId: account.name,
+            googleLocationId: loc.name,
+            googleLocationName: loc.title,
+            address: loc.storefrontAddress?.addressLines?.join(', ') || ''
+          });
+        }
+      }
+    }
+
+    return res.status(200).json({ locations: locationsList });
+  } catch (error) {
+    console.error('Error fetching Google locations:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 4. Save selected location ID
+app.post('/api/business/:id/google/select-location', authMiddleware, requireRole('merchant', 'admin'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const { googleAccountId, googleLocationId, googleLocationName } = req.body;
+    if (!googleAccountId || !googleLocationId || !googleLocationName) {
+      return res.status(400).json({ error: 'Missing account, location, or name details.' });
+    }
+
+    const business = await Business.findByIdAndUpdate(id, {
+      googleAccountId,
+      googleLocationId,
+      googleLocationName
+    }, { new: true });
+
+    return res.status(200).json(business);
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 5. Disconnect Google Account
+app.post('/api/business/:id/google/disconnect', authMiddleware, requireRole('merchant', 'admin'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const business = await Business.findByIdAndUpdate(id, {
+      googleRefreshToken: '',
+      googleAccountId: '',
+      googleLocationId: '',
+      googleLocationName: ''
+    }, { new: true });
+
+    return res.status(200).json(business);
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 6. Sync Google reviews and verify local logs using text similarity
+app.post('/api/business/:id/google/sync-reviews', authMiddleware, requireRole('merchant', 'admin'), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    if (user.role === 'merchant' && user.businessId?.toString() !== id) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const business = await Business.findById(id);
+    if (!business || !business.googleRefreshToken || !business.googleLocationId || !business.googleAccountId) {
+      return res.status(400).json({ error: 'Google integration is not fully configured.' });
+    }
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        refresh_token: business.googleRefreshToken,
+        grant_type: 'refresh_token'
+      }).toString()
+    });
+
+    if (!tokenRes.ok) {
+      return res.status(400).json({ error: 'Failed to refresh Google token.' });
+    }
+
+    const tokens = await tokenRes.json() as { access_token: string };
+    const accessToken = tokens.access_token;
+
+    const reviewsRes = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${business.googleLocationId}/reviews`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!reviewsRes.ok) {
+      const errText = await reviewsRes.text();
+      console.error('Failed to fetch Google reviews:', errText);
+      return res.status(400).json({ error: 'Failed to retrieve reviews from Google Business Profile.' });
+    }
+
+    const reviewsData = await reviewsRes.json() as { reviews?: any[] };
+    const googleReviews = reviewsData.reviews || [];
+
+    const localFeedbacks = await Feedback.find({ businessId: id, isVerifiedOnGoogle: false });
+    
+    let verifiedCount = 0;
+
+    for (const gRev of googleReviews) {
+      const gText = gRev.comment || '';
+      const gRating = gRev.starRating === 'FIVE' ? 5 : gRev.starRating === 'FOUR' ? 4 : gRev.starRating === 'THREE' ? 3 : gRev.starRating === 'TWO' ? 2 : 1;
+      const gAuthor = gRev.reviewer?.displayName || 'Anonymous';
+      const gReviewId = gRev.reviewId;
+      const gCreateTime = new Date(gRev.createTime);
+
+      if (!gText) continue;
+
+      for (const localFb of localFeedbacks) {
+        const textSim = calculateSimilarity(gText, localFb.feedbackText);
+        const timeDiff = Math.abs(gCreateTime.getTime() - localFb.createdAt.getTime());
+        const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+        if (textSim >= 0.7 && gRating === localFb.rating && hoursDiff <= 24) {
+          localFb.isVerifiedOnGoogle = true;
+          localFb.googleReviewId = gReviewId;
+          localFb.googleReviewAuthorName = gAuthor;
+          await localFb.save();
+          verifiedCount++;
+          break;
+        }
+      }
+    }
+
+    return res.status(200).json({ success: true, verifiedCount, totalReviewsSynced: googleReviews.length });
+  } catch (error) {
+    console.error('Error syncing Google reviews:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });

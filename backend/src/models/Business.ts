@@ -15,6 +15,10 @@ export interface IBusiness extends Document {
   planExpiry: Date | null;
   qrColor: string;
   qrBgColor: string;
+  googleRefreshToken?: string;
+  googleAccountId?: string;
+  googleLocationId?: string;
+  googleLocationName?: string;
   createdAt: Date;
 }
 
@@ -33,6 +37,10 @@ const BusinessSchema = new Schema<IBusiness>({
   planExpiry: { type: Date, default: null },
   qrColor: { type: String, default: '#6C63FF' },
   qrBgColor: { type: String, default: '#FFFFFF' },
+  googleRefreshToken: { type: String, default: '' },
+  googleAccountId: { type: String, default: '' },
+  googleLocationId: { type: String, default: '' },
+  googleLocationName: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 

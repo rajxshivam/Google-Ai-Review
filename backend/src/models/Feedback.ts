@@ -5,6 +5,9 @@ export interface IFeedback extends Document {
   rating: number;
   feedbackText: string;
   customerContact?: string;
+  isVerifiedOnGoogle?: boolean;
+  googleReviewId?: string;
+  googleReviewAuthorName?: string;
   createdAt: Date;
 }
 
@@ -13,6 +16,9 @@ const FeedbackSchema = new Schema<IFeedback>({
   rating: { type: Number, required: true, min: 1, max: 5 },
   feedbackText: { type: String, required: true, trim: true },
   customerContact: { type: String, trim: true, default: '' },
+  isVerifiedOnGoogle: { type: Boolean, default: false },
+  googleReviewId: { type: String, default: '' },
+  googleReviewAuthorName: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 
