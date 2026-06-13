@@ -67,7 +67,8 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(cookieParser());
 
 // MongoDB Connection
@@ -382,7 +383,7 @@ function getFallbackReviews(name: string, category: string, context: string, rat
 // 1. Create or Update Business
 app.post('/api/business', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { id, name, category, context, googleReviewUrl, keywords } = req.body;
+    const { id, name, category, context, googleReviewUrl, keywords, logoUrl } = req.body;
     const user = req.user!;
 
     if (user.role === 'merchant') {
@@ -405,13 +406,13 @@ app.post('/api/business', authMiddleware, async (req: AuthRequest, res: Response
     if (id && mongoose.Types.ObjectId.isValid(id)) {
       business = await Business.findByIdAndUpdate(
         id,
-        { name, category, context, googleReviewUrl, keywords: keywordsArray },
+        { name, category, context, googleReviewUrl, keywords: keywordsArray, logoUrl },
         { new: true, runValidators: true }
       );
     }
 
     if (!business) {
-      business = new Business({ name, category, context, googleReviewUrl, keywords: keywordsArray });
+      business = new Business({ name, category, context, googleReviewUrl, keywords: keywordsArray, logoUrl });
       await business.save();
 
       // If merchant, link this business to their user account
@@ -670,7 +671,7 @@ app.get('/api/admin/businesses', authMiddleware, requireRole('admin'), async (re
 // 2. Create a business (with optional isApproved status) + merchant account
 app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
-    const { name, category, context, googleReviewUrl, keywords, isApproved, email, password, location, mobileNumber } = req.body;
+    const { name, category, context, googleReviewUrl, keywords, isApproved, email, password, location, mobileNumber, logoUrl } = req.body;
 
     if (!name || !category || !context || !googleReviewUrl) {
       return res.status(400).json({ error: 'All fields are required.' });
@@ -690,7 +691,8 @@ app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req
       keywords: keywordsArray,
       location: location || '',
       mobileNumber: mobileNumber || '',
-      isApproved: isApproved === undefined ? false : isApproved
+      isApproved: isApproved === undefined ? false : isApproved,
+      logoUrl: logoUrl || ''
     });
 
     await business.save();
@@ -715,7 +717,7 @@ app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req
 app.put('/api/admin/business/:id', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, category, context, googleReviewUrl, keywords, isApproved, location, mobileNumber } = req.body;
+    const { name, category, context, googleReviewUrl, keywords, isApproved, location, mobileNumber, logoUrl } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
@@ -731,6 +733,7 @@ app.put('/api/admin/business/:id', authMiddleware, requireRole('admin'), async (
     if (location !== undefined) updateData.location = location;
     if (mobileNumber !== undefined) updateData.mobileNumber = mobileNumber;
     if (keywordsArray !== undefined) updateData.keywords = keywordsArray;
+    if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
 
     const business = await Business.findByIdAndUpdate(
       id,
@@ -1062,7 +1065,7 @@ app.put('/api/business/:id/profile', authMiddleware, requireRole('merchant'), as
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
-    const { qrColor, qrBgColor, location, mobileNumber } = req.body;
+    const { qrColor, qrBgColor, location, mobileNumber, logoUrl } = req.body;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
     }
@@ -1071,6 +1074,7 @@ app.put('/api/business/:id/profile', authMiddleware, requireRole('merchant'), as
     if (qrBgColor) updateData.qrBgColor = qrBgColor;
     if (location !== undefined) updateData.location = location;
     if (mobileNumber !== undefined) updateData.mobileNumber = mobileNumber;
+    if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
 
     const business = await Business.findByIdAndUpdate(id, updateData, { new: true });
     if (!business) return res.status(404).json({ error: 'Business not found.' });

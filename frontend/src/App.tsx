@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Star, 
-  Copy, 
-  Check, 
-  MessageSquare, 
-  Shield, 
-  Settings, 
-  QrCode, 
-  Printer, 
-  Download, 
-  Sparkles, 
+import {
+  Star,
+  Copy,
+  Check,
+  MessageSquare,
+  Shield,
+  Settings,
+  QrCode,
+  Printer,
+  Download,
+  Sparkles,
   AlertCircle,
   ThumbsUp,
   Languages,
@@ -229,7 +229,7 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
 
           <div className="form-group">
             <label className="form-label">Mobile Number</label>
-              <input type="tel" name="tel" autoComplete="tel" className="form-input" value={formData.mobileNumber}
+            <input type="tel" name="tel" autoComplete="tel" className="form-input" value={formData.mobileNumber}
               onChange={(e) => handleMobileChange(e.target.value)}
               placeholder="XXXXX XXXXX" />
           </div>
@@ -451,7 +451,30 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   const [isApproved, setIsApproved] = useState(false);
   const [qrColor, setQrColor] = useState('#6C63FF');
   const [qrBgColor, setQrBgColor] = useState('#FFFFFF');
-  
+  const [logoUrl, setLogoUrl] = useState('');
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 100 * 1024) {
+      showToast('Image size exceeds 100KB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        setLogoUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoUrl('');
+  };
+
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [scansToday, setScansToday] = useState(0);
   const [loadingFeedbacks, setLoadingFeedbacks] = useState(false);
@@ -464,7 +487,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   const [googleLocations, setGoogleLocations] = useState<any[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [syncingReviews, setSyncingReviews] = useState(false);
-  
+
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -503,6 +526,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
         setIsApproved(data.isApproved);
         if (data.qrColor) setQrColor(data.qrColor);
         if (data.qrBgColor) setQrBgColor(data.qrBgColor);
+        setLogoUrl(data.logoUrl || '');
         setGoogleRefreshToken(data.googleRefreshToken || '');
         setGoogleAccountId(data.googleAccountId || '');
         setGoogleLocationId(data.googleLocationId || '');
@@ -527,7 +551,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
           console.error('Error auto-syncing Google reviews:', err);
         }
       }
-      
+
       const response = await fetch(`${API_BASE}/business/${id}/feedbacks`, { credentials: 'include', headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
@@ -646,15 +670,16 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
         category,
         context,
         googleReviewUrl,
-        keywords: keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+        keywords: keywords.split(',').map(k => k.trim()).filter(k => k.length > 0),
+        logoUrl
       };
-      
+
       const response = await fetch(`${API_BASE}/business`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload)
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setBusinessId(data._id);
@@ -670,7 +695,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
       const mockId = businessId || 'demo_biz_12345';
       setBusinessId(mockId);
       localStorage.setItem('review_biz_id', mockId);
-      localStorage.setItem(`demo_biz_${mockId}`, JSON.stringify({ name, category, context, googleReviewUrl }));
+      localStorage.setItem(`demo_biz_${mockId}`, JSON.stringify({ name, category, context, googleReviewUrl, logoUrl }));
       showToast('Backend offline. Saved as Local Demo!');
       setActiveTab('qr');
     } finally {
@@ -736,13 +761,87 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   return (
     <div className="fade-in">
       {/* Printable Flyer Elements */}
-      <div className="qr-flyer-print">
-        <h1>Leave Us A Review!</h1>
-        <p>Your feedback helps us grow. Scan the QR code below and select your stars.</p>
-        <div className="qr-box">
-          <QRCodeSVG value={getCustomerLink()} size={280} level="H" />
+      <div className="qr-flyer-print" style={{ display: 'none' }}>
+        {/* Inner Card Wrapper with a nice border */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          height: '100%',
+          border: `2px solid ${qrColor || '#6C63FF'}`,
+          borderRadius: '20px',
+          padding: '2.5rem 1.5rem',
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          position: 'relative',
+          backgroundColor: '#ffffff'
+        }}>
+          {/* Top Section: Brand Header */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" style={{ width: '64px', height: '64px', objectFit: 'contain', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} />
+            ) : (
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Sparkles size={20} color={qrColor || '#6C63FF'} />
+              </div>
+            )}
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em', textTransform: 'capitalize', lineHeight: 1.2 }}>
+              {name || 'Our Business'}
+            </h1>
+          </div>
+
+          {/* Middle Section: CTA & QR */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
+            <span style={{
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: qrColor || '#6C63FF',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              background: `${qrColor}15` || '#6c63ff15',
+              padding: '0.4rem 1rem',
+              borderRadius: '999px',
+              display: 'inline-block'
+            }}>
+              Review us on Google
+            </span>
+            <div style={{
+              padding: '1.25rem',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <QRCodeSVG
+                value={getCustomerLink()}
+                size={180}
+                level="H"
+                fgColor={qrColor}
+                bgColor={qrBgColor}
+                imageSettings={logoUrl ? { src: logoUrl, height: 36, width: 36, excavate: true } : undefined}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Section: Powered by Shivam Nextgen */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+            <span style={{
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              color: qrColor || '#6C63FF',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              textAlign: 'center'
+            }}>
+              Powered by Shivam Nextgen
+            </span>
+          </div>
         </div>
-        <p style={{ marginTop: '3rem', fontWeight: 600, fontSize: '1.25rem' }}>Thank You For Supporting {name || 'Our Business'}!</p>
       </div>
 
       <div className="merchant-layout">
@@ -868,201 +967,235 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                   <Settings size={20} color="var(--accent)" /> Configure Business Settings
                 </h2>
                 <form onSubmit={handleSaveProfile}>
-                <div className="form-group">
-                  <label className="form-label">Business Name</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                    placeholder="e.g. Luigi's Pizza Palace" 
-                    required 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Business Category</label>
-                  <select 
-                    className="form-select" 
-                    value={category} 
-                    onChange={(e) => setCategory(e.target.value)}
-                  >
-                    <option value="Restaurant">Restaurant / Cafe</option>
-                    <option value="Medical Clinic">Dental / Medical Clinic</option>
-                    <option value="Auto Repair">Car Mechanic / Auto Repair</option>
-                    <option value="Retail Store">Retail Shop / Boutique</option>
-                    <option value="Hair Salon">Hair Salon / Spa</option>
-                    <option value="Hotel">Hotel / Guesthouse</option>
-                    <option value="Professional Services">Lawyer / Accountant / Agency</option>
-                    <option value="Other">Other Service Business</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Google Review URL</label>
-                  <input 
-                    type="url" 
-                    className="form-input" 
-                    value={googleReviewUrl} 
-                    onChange={(e) => setGoogleReviewUrl(e.target.value)} 
-                    placeholder="https://g.page/r/YOUR_BUSINESS_ID/review" 
-                    required 
-                  />
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                    Tip: Get this link from your Google Business Profile manager under "Ask for reviews".
-                  </p>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">AI Prompt Context (Tell AI about your business)</label>
-                  <textarea 
-                    className="form-textarea" 
-                    value={context} 
-                    onChange={(e) => setContext(e.target.value)} 
-                    placeholder="Provide context like: Cozy Italian pizza shop famous for wood-fired pepperoni pizza, friendly service, and a beautiful outdoor patio. We want reviews to focus on friendly staff, fast service, and fresh ingredients." 
-                    required 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">SEO Keywords (Optional)</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    value={keywords} 
-                    onChange={(e) => setKeywords(e.target.value)} 
-                    placeholder="e.g. best pizza in town, fresh ingredients, family friendly, affordable prices" 
-                  />
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                    Comma-separated keywords the AI will naturally weave into reviews for better Google search visibility.
-                  </p>
-                </div>
-
-                <button type="submit" className="btn btn-accent" disabled={isSubmitting} style={{ width: '100%' }}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} />
-                      Saving details...
-                    </>
-                  ) : 'Save & Generate Review QR'}
-                </button>
-              </form>
-            </div>
-
-            {/* Google Business Profile Integration Card */}
-            <div className="card fade-in">
-              <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <GoogleLogoSvg /> Google Business Profile Integration
-              </h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.875rem', lineHeight: '1.5' }}>
-                Connect your Google Business Profile to sync official Google reviews. When connected, our system matches local review logs with real Google reviews to verify authenticity and display a green "Verified" checkmark.
-              </p>
-
-              {!googleRefreshToken ? (
-                <div style={{ padding: '2rem 1.5rem', border: '1px dashed var(--border-light)', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', textAlign: 'center' }}>
-                  <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                    <div style={{ padding: '0.75rem', background: '#fff', borderRadius: '50%', boxShadow: 'var(--shadow-sm)', display: 'inline-flex' }}>
-                      <GoogleLogoSvg />
-                    </div>
+                  <div className="form-group">
+                    <label className="form-label">Business Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Luigi's Pizza Palace"
+                      required
+                    />
                   </div>
-                  <h4 style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Google Account Disconnected</h4>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '400px', margin: '0 auto 1.5rem' }}>
-                    Link your Google account to authorize retrieval of locations and customer reviews.
-                  </p>
-                  <a 
-                    href={`${API_BASE}/auth/google?businessId=${businessId}`} 
-                    className="btn btn-secondary" 
-                    style={{ display: 'inline-flex', alignItems: 'center', borderColor: '#dadce0', fontWeight: 600 }}
-                  >
-                    <GoogleLogoSvg /> Connect Google Account
-                  </a>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', padding: '1.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', background: 'var(--bg-secondary)', marginBottom: '1.5rem' }}>
-                    <div style={{ flex: 1, minWidth: '250px' }}>
-                      <h4 style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)' }}>
-                        <CheckCircle size={16} /> Google Account Connected
-                      </h4>
-                      
-                      {googleLocationId ? (
-                        <div style={{ marginTop: '0.75rem' }}>
-                          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Linked Location:</p>
-                          <p style={{ fontSize: '0.9375rem', fontWeight: 700, marginTop: '0.15rem' }}>{googleLocationName}</p>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.15rem' }}>Location: {googleLocationId.split('/').pop()} | Account: {googleAccountId.split('/').pop()}</p>
+
+                  <div className="form-group">
+                    <label className="form-label">Business Category</label>
+                    <select
+                      className="form-select"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    >
+                      <option value="Restaurant">Restaurant / Cafe</option>
+                      <option value="Medical Clinic">Dental / Medical Clinic</option>
+                      <option value="Auto Repair">Car Mechanic / Auto Repair</option>
+                      <option value="Retail Store">Retail Shop / Boutique</option>
+                      <option value="Hair Salon">Hair Salon / Spa</option>
+                      <option value="Hotel">Hotel / Guesthouse</option>
+                      <option value="Professional Services">Lawyer / Accountant / Agency</option>
+                      <option value="Other">Other Service Business</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Google Review URL</label>
+                    <input
+                      type="url"
+                      className="form-input"
+                      value={googleReviewUrl}
+                      onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                      placeholder="https://g.page/r/YOUR_BUSINESS_ID/review"
+                      required
+                    />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      Tip: Get this link from your Google Business Profile manager under "Ask for reviews".
+                    </p>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">AI Prompt Context (Tell AI about your business)</label>
+                    <textarea
+                      className="form-textarea"
+                      value={context}
+                      onChange={(e) => setContext(e.target.value)}
+                      placeholder="Provide context like: Cozy Italian pizza shop famous for wood-fired pepperoni pizza, friendly service, and a beautiful outdoor patio. We want reviews to focus on friendly staff, fast service, and fresh ingredients."
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">SEO Keywords (Optional)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={keywords}
+                      onChange={(e) => setKeywords(e.target.value)}
+                      placeholder="e.g. best pizza in town, fresh ingredients, family friendly, affordable prices"
+                    />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      Comma-separated keywords the AI will naturally weave into reviews for better Google search visibility.
+                    </p>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label className="form-label">Business Logo</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+                      {logoUrl ? (
+                        <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', overflow: 'hidden', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img src={logoUrl} alt="Logo Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                         </div>
                       ) : (
-                        <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--warning-light)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
-                          <p style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', fontWeight: 600 }}>Location Selection Required</p>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Please select a business location below to sync reviews from.</p>
+                        <div style={{ width: '80px', height: '80px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-light)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+                          <span>No Logo</span>
                         </div>
                       )}
-                    </div>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', justifyContent: 'center', minWidth: '150px' }}>
-                      {googleLocationId && (
-                        <button 
-                          className="btn btn-accent btn-sm" 
-                          onClick={handleSyncReviews} 
-                          disabled={syncingReviews}
-                          style={{ width: '100%', fontSize: '0.8125rem' }}
-                        >
-                          <RefreshCw size={14} className={syncingReviews ? 'spinner' : ''} /> {syncingReviews ? 'Syncing...' : 'Sync Reviews Now'}
-                        </button>
-                      )}
-                      <button 
-                        className="btn btn-outline btn-sm" 
-                        onClick={handleDisconnectGoogle}
-                        style={{ width: '100%', fontSize: '0.8125rem', color: 'var(--danger)', borderColor: 'var(--border-light)' }}
-                      >
-                        Disconnect Account
-                      </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label className="btn btn-outline btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', margin: 0, width: 'fit-content' }}>
+                          <span>Choose File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                        {logoUrl && (
+                          <button type="button" className="btn btn-outline btn-sm" onClick={handleRemoveLogo} style={{ color: 'var(--danger)', borderColor: 'var(--border-light)', width: 'fit-content' }}>
+                            Remove Logo
+                          </button>
+                        )}
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+                          Max size 100KB. Squared image is recommended for best QR scannability.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {(!googleLocationId || googleLocations.length > 0) && (
-                    <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '1.5rem' }}>
-                      <h4 style={{ marginBottom: '1rem', fontSize: '0.875rem', fontWeight: 600 }}>Select Business Location</h4>
-                      
-                      {googleLocations.length === 0 ? (
-                        <button 
-                          className="btn btn-secondary btn-sm" 
-                          onClick={fetchGoogleLocations} 
-                          disabled={loadingLocations}
-                        >
-                          {loadingLocations ? <><Loader2 size={14} className="spinner" /> Fetching Locations...</> : 'Fetch Locations'}
-                        </button>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '450px' }}>
-                          <select 
-                            className="form-select"
-                            defaultValue=""
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (!val) return;
-                              const loc = googleLocations.find(l => l.googleLocationId === val);
-                              if (loc) handleSelectLocation(loc);
-                            }}
+                  <button type="submit" className="btn btn-accent" disabled={isSubmitting} style={{ width: '100%' }}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} />
+                        Saving details...
+                      </>
+                    ) : 'Save & Generate Review QR'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Google Business Profile Integration Card */}
+              <div className="card fade-in">
+                <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <GoogleLogoSvg /> Google Business Profile Integration
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.875rem', lineHeight: '1.5' }}>
+                  Connect your Google Business Profile to sync official Google reviews. When connected, our system matches local review logs with real Google reviews to verify authenticity and display a green "Verified" checkmark.
+                </p>
+
+                {!googleRefreshToken ? (
+                  <div style={{ padding: '2rem 1.5rem', border: '1px dashed var(--border-light)', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', textAlign: 'center' }}>
+                    <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ padding: '0.75rem', background: '#fff', borderRadius: '50%', boxShadow: 'var(--shadow-sm)', display: 'inline-flex' }}>
+                        <GoogleLogoSvg />
+                      </div>
+                    </div>
+                    <h4 style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Google Account Disconnected</h4>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '400px', margin: '0 auto 1.5rem' }}>
+                      Link your Google account to authorize retrieval of locations and customer reviews.
+                    </p>
+                    <a
+                      href={`${API_BASE}/auth/google?businessId=${businessId}`}
+                      className="btn btn-secondary"
+                      style={{ display: 'inline-flex', alignItems: 'center', borderColor: '#dadce0', fontWeight: 600 }}
+                    >
+                      <GoogleLogoSvg /> Connect Google Account
+                    </a>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', padding: '1.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', background: 'var(--bg-secondary)', marginBottom: '1.5rem' }}>
+                      <div style={{ flex: 1, minWidth: '250px' }}>
+                        <h4 style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)' }}>
+                          <CheckCircle size={16} /> Google Account Connected
+                        </h4>
+
+                        {googleLocationId ? (
+                          <div style={{ marginTop: '0.75rem' }}>
+                            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Linked Location:</p>
+                            <p style={{ fontSize: '0.9375rem', fontWeight: 700, marginTop: '0.15rem' }}>{googleLocationName}</p>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '0.15rem' }}>Location: {googleLocationId.split('/').pop()} | Account: {googleAccountId.split('/').pop()}</p>
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--warning-light)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                            <p style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', fontWeight: 600 }}>Location Selection Required</p>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Please select a business location below to sync reviews from.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', justifyContent: 'center', minWidth: '150px' }}>
+                        {googleLocationId && (
+                          <button
+                            className="btn btn-accent btn-sm"
+                            onClick={handleSyncReviews}
+                            disabled={syncingReviews}
+                            style={{ width: '100%', fontSize: '0.8125rem' }}
                           >
-                            <option value="" disabled>-- Select a Location --</option>
-                            {googleLocations.map((loc) => (
-                              <option key={loc.googleLocationId} value={loc.googleLocationId}>
-                                {loc.googleLocationName} ({loc.address || 'No address'})
-                              </option>
-                            ))}
-                          </select>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            Don't see your location? Make sure it's verified in your Google Business Profile Console.
-                          </p>
-                        </div>
-                      )}
+                            <RefreshCw size={14} className={syncingReviews ? 'spinner' : ''} /> {syncingReviews ? 'Syncing...' : 'Sync Reviews Now'}
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={handleDisconnectGoogle}
+                          style={{ width: '100%', fontSize: '0.8125rem', color: 'var(--danger)', borderColor: 'var(--border-light)' }}
+                        >
+                          Disconnect Account
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {(!googleLocationId || googleLocations.length > 0) && (
+                      <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '1.5rem' }}>
+                        <h4 style={{ marginBottom: '1rem', fontSize: '0.875rem', fontWeight: 600 }}>Select Business Location</h4>
+
+                        {googleLocations.length === 0 ? (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={fetchGoogleLocations}
+                            disabled={loadingLocations}
+                          >
+                            {loadingLocations ? <><Loader2 size={14} className="spinner" /> Fetching Locations...</> : 'Fetch Locations'}
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '450px' }}>
+                            <select
+                              className="form-select"
+                              defaultValue=""
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (!val) return;
+                                const loc = googleLocations.find(l => l.googleLocationId === val);
+                                if (loc) handleSelectLocation(loc);
+                              }}
+                            >
+                              <option value="" disabled>-- Select a Location --</option>
+                              {googleLocations.map((loc) => (
+                                <option key={loc.googleLocationId} value={loc.googleLocationId}>
+                                  {loc.googleLocationName} ({loc.address || 'No address'})
+                                </option>
+                              ))}
+                            </select>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              Don't see your location? Make sure it's verified in your Google Business Profile Console.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
           {activeTab === 'qr' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
@@ -1076,7 +1209,15 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
 
                 <div className="qr-preview-container">
                   <div className="qr-box" ref={qrRef}>
-                    <QRCodeSVG id="qr-code-svg" value={getCustomerLink()} size={200} level="H" fgColor={qrColor} bgColor={qrBgColor} />
+                    <QRCodeSVG
+                      id="qr-code-svg"
+                      value={getCustomerLink()}
+                      size={200}
+                      level="H"
+                      fgColor={qrColor}
+                      bgColor={qrBgColor}
+                      imageSettings={logoUrl ? { src: logoUrl, height: 40, width: 40, excavate: true } : undefined}
+                    />
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.25rem' }}>Scan to leave a review</p>
@@ -1140,8 +1281,8 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <MessageSquare size={20} color="var(--accent)" /> Customer Reviews
                 </h2>
-                <button 
-                  className="btn btn-outline btn-sm" 
+                <button
+                  className="btn btn-outline btn-sm"
                   onClick={() => businessId && fetchFeedbacks(businessId)}
                   disabled={loadingFeedbacks}
                 >
@@ -1270,7 +1411,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                         <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                         <Tooltip />
                         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                          {[1,2,3,4,5].map((_, index) => (
+                          {[1, 2, 3, 4, 5].map((_, index) => (
                             <Cell key={index} fill={['#dc2626', '#f97316', '#eab308', '#22c55e', '#16a34a'][index]} />
                           ))}
                         </Bar>
@@ -1537,10 +1678,10 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
       console.log('Server unreachable for generation. Running fallback generator.');
       // Simulating response matching backend fallback generator
       const mockReviews = getDemoGeneratedReviews(
-        business?.name || 'This Business', 
-        business?.category || 'Service', 
-        business?.context || '', 
-        selectedRating, 
+        business?.name || 'This Business',
+        business?.category || 'Service',
+        business?.context || '',
+        selectedRating,
         targetLanguage
       );
       setTimeout(() => {
@@ -1573,7 +1714,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
 
   const handleCopyAndRedirect = async (text: string, idx: number) => {
     setSelectedReviewIdx(idx);
-    
+
     try {
       await navigator.clipboard.writeText(text);
       showToast('Review copied to clipboard!');
@@ -1641,7 +1782,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
         createdAt: new Date().toISOString()
       });
       localStorage.setItem(`feedbacks_${businessId}`, JSON.stringify(localFeedbacks));
-      
+
       setTimeout(() => {
         setFeedbackSubmitted(true);
         setIsSubmittingFeedback(false);
@@ -1689,8 +1830,8 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
         <div className="form-group" style={{ marginBottom: '1.5rem' }}>
           <label className="form-label" style={{ fontWeight: 600 }}>Mobile Number</label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input 
-              type="tel" 
+            <input
+              type="tel"
               name="phone"
               className="form-input"
               value={contact}
@@ -1729,9 +1870,8 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
             <button
               key={stars}
               type="button"
-              className={`star-button ${
-                (hoverRating || rating) >= stars ? 'active' : ''
-              }`}
+              className={`star-button ${(hoverRating || rating) >= stars ? 'active' : ''
+                }`}
               onClick={() => handleRatingSelect(stars)}
               onMouseEnter={() => setHoverRating(stars)}
               onMouseLeave={() => setHoverRating(0)}
@@ -1745,16 +1885,16 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
         {rating >= 2 && (
           <div className="fade-in" style={{ marginTop: '2rem' }}>
             <hr style={{ border: 'none', borderTop: '1px solid var(--border-light)', marginBottom: '1.5rem' }} />
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h4 style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Sparkles size={16} color="var(--accent)" /> Select review template:
               </h4>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                 <Languages size={14} color="var(--text-secondary)" />
-                <select 
-                  className="form-select" 
-                  value={language} 
+                <select
+                  className="form-select"
+                  value={language}
                   onChange={handleLanguageChange}
                   style={{ padding: '0.25rem 1.75rem 0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto' }}
                 >
@@ -1775,7 +1915,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
             ) : (
               <div className="review-options-grid">
                 {reviews.map((text, idx) => (
-                  <div 
+                  <div
                     key={idx}
                     className={`review-card ${selectedReviewIdx === idx ? 'selected' : ''}`}
                     onClick={() => handleCopyAndRedirect(text, idx)}
@@ -1799,7 +1939,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
                 ))}
               </div>
             )}
-            
+
             {!loading && reviews.length > 0 && (
               <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '1.5rem', lineHeight: '1.4' }}>
                 * Clicking copy copies the text to your phone's clipboard and redirects you to our official Google Review page. Just paste it in!
@@ -1812,7 +1952,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
         {rating === 1 && (
           <div className="fade-in" style={{ marginTop: '2rem' }}>
             <hr style={{ border: 'none', borderTop: '1px solid var(--border-light)', marginBottom: '1.5rem' }} />
-            
+
             {!feedbackSubmitted ? (
               <form onSubmit={handleFeedbackSubmit}>
                 <div style={{ background: 'var(--accent-light)', padding: '1rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-light)' }}>
@@ -1826,7 +1966,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
 
                 <div className="form-group">
                   <label className="form-label">Tell us what went wrong?</label>
-                  <textarea 
+                  <textarea
                     className="form-textarea"
                     required
                     value={feedbackText}
@@ -1932,7 +2072,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'businesses' | 'registrations' | 'feedbacks' | 'add' | 'revenue'>('businesses');
-  
+
   // Form state for add/edit business
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Restaurant');
@@ -2299,7 +2439,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                         )}
                       </td>
                       <td>
-                        <button 
+                        <button
                           className={`btn ${biz.isApproved ? 'btn-secondary' : 'btn-accent'}`}
                           onClick={() => handleToggleApprove(biz)}
                           style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', minWidth: '100px' }}
@@ -2333,9 +2473,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                         </button>
                       </td>
                       <td>
-                        <a 
-                          href={`/review/${biz._id}`} 
-                          target="_blank" 
+                        <a
+                          href={`/review/${biz._id}`}
+                          target="_blank"
                           rel="noreferrer"
                           style={{ fontSize: '0.8125rem', color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
                         >
@@ -2719,7 +2859,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                 <tbody>
                   {subscriptions.map(sub => (
                     <tr key={sub._id}>
-                        <td style={{ fontWeight: 600 }}>{sub.businessId?.name || 'Unknown'}</td>
+                      <td style={{ fontWeight: 600 }}>{sub.businessId?.name || 'Unknown'}</td>
                       <td>
                         <span className="copy-badge" style={{
                           backgroundColor: sub.plan === 'lifetime' ? 'var(--warning)' : 'var(--accent)',

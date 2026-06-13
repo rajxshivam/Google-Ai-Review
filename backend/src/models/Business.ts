@@ -19,6 +19,7 @@ export interface IBusiness extends Document {
   googleAccountId?: string;
   googleLocationId?: string;
   googleLocationName?: string;
+  logoUrl?: string;
   createdAt: Date;
 }
 
@@ -41,6 +42,7 @@ const BusinessSchema = new Schema<IBusiness>({
   googleAccountId: { type: String, default: '' },
   googleLocationId: { type: String, default: '' },
   googleLocationName: { type: String, default: '' },
+  logoUrl: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 
