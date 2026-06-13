@@ -10,6 +10,7 @@ import { Scan } from './models/Scan';
 import { User } from './models/User';
 import { Registration } from './models/Registration';
 import { Subscription } from './models/Subscription';
+import { StockReview } from './models/StockReview';
 import { authMiddleware, requireRole, generateToken, AuthRequest } from './middleware/auth';
 
 dotenv.config();
@@ -261,6 +262,9 @@ app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('adm
     reg.status = 'approved';
     await reg.save();
 
+    // Trigger stock generation in background
+    initializeBusinessStock(business);
+
     return res.status(200).json({ message: 'Registration approved. Business and merchant account created.', business, user: { _id: user._id, email: user.email } });
   } catch (error) {
     console.error('Error approving registration:', error);
@@ -378,6 +382,168 @@ function getFallbackReviews(name: string, category: string, context: string, rat
   });
 }
 
+// Helper to generate bulk reviews in stock using Gemini
+async function generateStockReviews(business: any, rating: number, count: number): Promise<string[]> {
+  const generated: string[] = [];
+  
+  if (!GEMINI_API_KEY) {
+    console.log('Gemini API key missing, generating template reviews for stock.');
+    for (let i = 0; i < count; i++) {
+      const templates = getFallbackReviews(business.name, business.category, business.context, rating, 'English');
+      const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+      generated.push(`${randomTemplate} (${i + 1})`);
+    }
+    return generated;
+  }
+
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL || 'gemini-3.1-flash-lite' });
+
+  const keywordsStr = business.keywords && business.keywords.length > 0
+    ? `\nSEO Keywords to naturally include in the reviews (use these words/phrases organically, not forced): ${business.keywords.join(', ')}`
+    : '';
+
+  // To prevent timeouts and ensure high variety, we generate in chunks of 20
+  const chunkSize = 20;
+  let attempts = 0;
+  const maxAttempts = Math.ceil(count / chunkSize) + 3;
+
+  while (generated.length < count && attempts < maxAttempts) {
+    attempts++;
+    const needed = count - generated.length;
+    const currentBatchSize = Math.min(chunkSize, needed);
+
+    try {
+      const prompt = `You are an AI generating realistic, diverse, and natural customer reviews in English for a ${business.category} business named "${business.name}".
+Business Context: ${business.context}${keywordsStr}
+Target Rating: ${rating} out of 5 stars.
+Instructions:
+Generate exactly ${currentBatchSize} unique, realistic review suggestions of varying lengths (from short one-sentence to medium 2-3 sentences), with different writing styles/tones.
+IMPORTANT: Naturally weave in the SEO keywords where they fit organically. Do NOT stuff keywords.
+Do NOT include any numbers, bullets, list headers, quotes around the options, or additional conversational text.
+Return the suggestions formatted strictly as a single JSON array of strings, like this:
+["Review suggestion 1", "Review suggestion 2", ...]`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      let text = response.text().trim();
+
+      // Clean markdown blocks
+      if (text.startsWith('```json')) {
+        text = text.substring(7);
+      } else if (text.startsWith('```')) {
+        text = text.substring(3);
+      }
+      if (text.endsWith('```')) {
+        text = text.substring(0, text.length - 3);
+      }
+      text = text.trim();
+
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          for (const rev of parsed) {
+            if (typeof rev === 'string' && rev.trim().length > 0) {
+              generated.push(rev.trim());
+            }
+          }
+        }
+      } catch (parseErr) {
+        console.error('Failed to parse bulk generation chunk JSON, running line parser:', text);
+        const lines = text
+          .split('\n')
+          .map(l => l.replace(/^[-*•\d.]+\s*/, '').replace(/^"|"$/g, '').trim())
+          .filter(l => l.length > 0);
+        for (const line of lines) {
+          generated.push(line);
+        }
+      }
+    } catch (err) {
+      console.error(`Attempt ${attempts} failed to generate stock reviews chunk:`, err);
+    }
+  }
+
+  // If Gemini failed to deliver full count, fill up with fallbacks
+  if (generated.length < count) {
+    const startCount = generated.length;
+    console.log(`Gemini chunk generation under-delivered. Adding ${count - startCount} template reviews to reach target.`);
+    for (let i = startCount; i < count; i++) {
+      const templates = getFallbackReviews(business.name, business.category, business.context, rating, 'English');
+      const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+      generated.push(`${randomTemplate} (${i + 1})`);
+    }
+  }
+
+  return generated.slice(0, count);
+}
+
+// Helper to translate an array of reviews to target language on the fly
+async function translateReviews(reviews: string[], targetLanguage: string): Promise<string[]> {
+  if (!targetLanguage || targetLanguage.toLowerCase() === 'english' || !GEMINI_API_KEY) {
+    return reviews;
+  }
+  try {
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL || 'gemini-3.1-flash-lite' });
+    const prompt = `You are a translator. Translate the following array of customer reviews into ${targetLanguage}.
+Keep the exact meaning and tone. Return the translated text formatted strictly as a single JSON array of strings:
+${JSON.stringify(reviews)}`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = response.text().trim();
+    if (text.startsWith('```json')) {
+      text = text.substring(7);
+    } else if (text.startsWith('```')) {
+      text = text.substring(3);
+    }
+    if (text.endsWith('```')) {
+      text = text.substring(0, text.length - 3);
+    }
+    text = text.trim();
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed) && parsed.length === reviews.length) {
+      return parsed;
+    }
+  } catch (err) {
+    console.error('Error translating reviews:', err);
+  }
+  return reviews;
+}
+
+// Background initializer for business review stock
+async function initializeBusinessStock(business: any) {
+  try {
+    const existingCount = await StockReview.countDocuments({ businessId: business._id });
+    if (existingCount > 0) {
+      console.log(`Business ${business.name} already has ${existingCount} reviews in stock. Skipping auto-generation.`);
+      return;
+    }
+
+    console.log(`Starting background review stock generation (100 each for 2, 3, 4, 5 stars) for business: ${business.name}`);
+    // Run generation asynchronously to prevent blocking the calling requests
+    (async () => {
+      for (const rating of [2, 3, 4, 5]) {
+        try {
+          const reviews = await generateStockReviews(business, rating, 100);
+          const stockDocs = reviews.map(text => ({
+            businessId: business._id,
+            rating,
+            reviewText: text,
+            isUsed: false
+          }));
+          await StockReview.insertMany(stockDocs);
+          console.log(`Successfully generated and added 100 stock reviews for rating ${rating} of business: ${business.name}`);
+        } catch (ratingErr) {
+          console.error(`Failed to auto-generate stock reviews for rating ${rating} of business ${business.name}:`, ratingErr);
+        }
+      }
+    })();
+  } catch (err) {
+    console.error('Error initializing business stock:', err);
+  }
+}
+
 // Routes
 
 // 1. Create or Update Business
@@ -461,7 +627,7 @@ app.get('/api/business/:id', async (req: Request, res: Response) => {
 app.post('/api/business/:id/feedback', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { rating, feedbackText, customerContact } = req.body;
+    const { rating, feedbackText, customerContact, stockReviewId } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
@@ -492,6 +658,24 @@ app.post('/api/business/:id/feedback', async (req: Request, res: Response) => {
     });
 
     await feedback.save();
+
+    // If a stock review was selected, consume it so it is never shown again
+    if (stockReviewId && mongoose.Types.ObjectId.isValid(stockReviewId)) {
+      await StockReview.findByIdAndUpdate(stockReviewId, { isUsed: true });
+    } else {
+      // Fallback matching by exact text
+      const matchingUnusedReview = await StockReview.findOne({
+        businessId: id,
+        rating,
+        reviewText: feedbackText,
+        isUsed: false
+      });
+      if (matchingUnusedReview) {
+        matchingUnusedReview.isUsed = true;
+        await matchingUnusedReview.save();
+      }
+    }
+
     return res.status(201).json({ success: true, message: 'Feedback submitted privately. Thank you!' });
   } catch (error) {
     console.error('Error in POST /api/business/:id/feedback:', error);
@@ -579,11 +763,37 @@ app.post('/api/business/:id/generate-reviews', async (req: Request, res: Respons
     const targetRating = rating || 5;
     const targetLanguage = language || 'English';
 
-    // If Gemini key is missing, immediately run fallback
-    if (!GEMINI_API_KEY) {
-      console.log('Gemini API key missing, generating template reviews.');
-      const reviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
+    // 1. Check stock first
+    const stockCount = await StockReview.countDocuments({ businessId: id, rating: targetRating, isUsed: false });
+
+    if (stockCount >= 5) {
+      // Pull 5 random unused reviews from stock
+      const stockDocs = await StockReview.aggregate([
+        { $match: { businessId: new mongoose.Types.ObjectId(id), rating: targetRating, isUsed: false } },
+        { $sample: { size: 5 } }
+      ]);
+
+      const originalReviewsText = stockDocs.map(s => s.reviewText);
+
+      // Translate dynamically if target language is not English
+      const translatedReviews = await translateReviews(originalReviewsText, targetLanguage);
+
+      const reviews = stockDocs.map((s, idx) => ({
+        id: s._id.toString(),
+        text: translatedReviews[idx]
+      }));
+
       return res.status(200).json({ reviews });
+    }
+
+    // 2. Stock is low (< 5), fall back to dynamic generation via Gemini
+    console.log(`Stock reviews low for rating ${targetRating} (current stock: ${stockCount}). Generating dynamically.`);
+
+    if (!GEMINI_API_KEY) {
+      const fallbackReviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
+      return res.status(200).json({
+        reviews: fallbackReviews.map(text => ({ id: 'dynamic', text }))
+      });
     }
 
     try {
@@ -622,29 +832,34 @@ Return the suggestions formatted strictly as a single JSON array of strings, lik
       try {
         const parsed = JSON.parse(text);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return res.status(200).json({ reviews: parsed });
+          return res.status(200).json({
+            reviews: parsed.map(t => ({ id: 'dynamic', text: t }))
+          });
         }
       } catch (parseErr) {
         console.error('Failed to parse Gemini JSON output, falling back to line parsing:', text);
-        // Fallback line parsing
         const lines = text
           .split('\n')
           .map(l => l.replace(/^[-*•\d.]+\s*/, '').replace(/^"|"$/g, '').trim())
           .filter(l => l.length > 0);
         if (lines.length > 0) {
-          return res.status(200).json({ reviews: lines });
+          return res.status(200).json({
+            reviews: lines.map(t => ({ id: 'dynamic', text: t }))
+          });
         }
       }
 
-      // If parsing failed completely
-      const reviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
-      return res.status(200).json({ reviews });
+      const fallbackReviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
+      return res.status(200).json({
+        reviews: fallbackReviews.map(t => ({ id: 'dynamic', text: t }))
+      });
 
     } catch (geminiError) {
       console.error('Gemini API execution error:', geminiError);
-      // Fallback
-      const reviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
-      return res.status(200).json({ reviews });
+      const fallbackReviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
+      return res.status(200).json({
+        reviews: fallbackReviews.map(t => ({ id: 'dynamic', text: t }))
+      });
     }
   } catch (error) {
     console.error('Error in POST /api/business/:id/generate-reviews:', error);
@@ -706,6 +921,10 @@ app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req
       }
     }
 
+    if (business.isApproved) {
+      initializeBusinessStock(business);
+    }
+
     return res.status(201).json({ business, merchantUser: merchantUser ? { _id: merchantUser._id, email: merchantUser.email } : null });
   } catch (error) {
     console.error('Error in POST /api/admin/business:', error);
@@ -745,6 +964,10 @@ app.put('/api/admin/business/:id', authMiddleware, requireRole('admin'), async (
       return res.status(404).json({ error: 'Business not found.' });
     }
 
+    if (business.isApproved) {
+      initializeBusinessStock(business);
+    }
+
     return res.status(200).json(business);
   } catch (error) {
     console.error('Error in PUT /api/admin/business/:id:', error);
@@ -770,6 +993,10 @@ app.put('/api/admin/business/:id/approve', authMiddleware, requireRole('admin'),
 
     if (!business) {
       return res.status(404).json({ error: 'Business not found.' });
+    }
+
+    if (business.isApproved) {
+      initializeBusinessStock(business);
     }
 
     return res.status(200).json(business);
@@ -1048,6 +1275,72 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (_req:
     });
   } catch (error) {
     console.error('Error fetching revenue:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 6. Get business review stock counts and list
+app.get('/api/admin/business/:id/stock', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid Business ID.' });
+    }
+
+    const counts = await StockReview.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), isUsed: false } },
+      { $group: { _id: '$rating', count: { $sum: 1 } } }
+    ]);
+
+    const stockCounts = { '2': 0, '3': 0, '4': 0, '5': 0 };
+    counts.forEach(c => {
+      const ratingStr = String(c._id);
+      if (ratingStr in stockCounts) {
+        stockCounts[ratingStr as keyof typeof stockCounts] = c.count;
+      }
+    });
+
+    const reviewsList = await StockReview.find({ businessId: id, isUsed: false }).sort({ createdAt: -1 });
+
+    return res.status(200).json({ stockCounts, reviews: reviewsList });
+  } catch (error) {
+    console.error('Error fetching business stock:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 7. Generate stock reviews for a business manually
+app.post('/api/admin/business/:id/generate-stock', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { rating, count } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid Business ID.' });
+    }
+
+    if (!rating || !count || rating < 2 || rating > 5 || count <= 0 || count > 200) {
+      return res.status(400).json({ error: 'Invalid rating (2-5) or count (1-200).' });
+    }
+
+    const business = await Business.findById(id);
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found.' });
+    }
+
+    console.log(`Generating ${count} reviews of star ${rating} for business: ${business.name}`);
+    const reviews = await generateStockReviews(business, rating, count);
+    const stockDocs = reviews.map(text => ({
+      businessId: business._id,
+      rating,
+      reviewText: text,
+      isUsed: false
+    }));
+
+    await StockReview.insertMany(stockDocs);
+    return res.status(200).json({ success: true, countGenerated: count });
+  } catch (error) {
+    console.error('Error generating stock reviews:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });

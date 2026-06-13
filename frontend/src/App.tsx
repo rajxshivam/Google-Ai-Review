@@ -762,7 +762,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
     <div className="fade-in">
       {/* Printable Flyer Elements */}
       <div className="qr-flyer-print" style={{ display: 'none' }}>
-        {/* Inner Card Wrapper with a nice border */}
+        {/* Previous design commented out as requested
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -778,7 +778,6 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
           position: 'relative',
           backgroundColor: '#ffffff'
         }}>
-          {/* Top Section: Brand Header */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
             {logoUrl ? (
               <img src={logoUrl} alt="Logo" style={{ width: '64px', height: '64px', objectFit: 'contain', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} />
@@ -792,7 +791,6 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
             </h1>
           </div>
 
-          {/* Middle Section: CTA & QR */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
             <span style={{
               fontSize: '0.75rem',
@@ -828,7 +826,6 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
             </div>
           </div>
 
-          {/* Bottom Section: Powered by Shivam Nextgen */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
             <span style={{
               fontSize: '0.95rem',
@@ -842,6 +839,53 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
             </span>
           </div>
         </div>
+        */}
+
+        {/* New Standee Design */}
+        <div className="dots"></div>
+        <div className="diamonds left">
+          <div className="diamond"></div>
+          <div className="diamond"></div>
+          <div className="diamond"></div>
+        </div>
+        <div className="diamonds right">
+          <div className="diamond"></div>
+          <div className="diamond"></div>
+          <div className="diamond"></div>
+        </div>
+
+        {logoUrl ? (
+          <img className="top-logo" src={logoUrl} alt="Logo" />
+        ) : (
+          <svg className="top-logo" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M25.5 12C23.0145 12 20.916 13.4355 19.827 15.534C19.1685 14.2695 17.8425 13.5 16.5 13.5C14.0145 13.5 12 15.5145 12 18C12 20.4855 14.0145 22.5 16.5 22.5C17.8425 22.5 19.1685 21.7305 19.827 20.466C20.916 22.5645 23.0145 24 25.5 24C28.8135 24 31.5 21.3135 31.5 18C31.5 14.6865 28.8135 12 25.5 12ZM16.5 20.25C15.258 20.25 14.25 19.242 14.25 18C14.25 16.758 15.258 15.75 16.5 15.75C17.742 15.75 18.75 16.758 18.75 18C18.75 19.242 17.742 20.25 16.5 20.25ZM25.5 21.75C23.43 21.75 21.75 20.07 21.75 18C21.75 15.93 23.43 14.25 25.5 14.25C27.57 14.25 29.25 15.93 29.25 18C29.25 20.07 27.57 21.75 25.5 21.75Z"
+              fill="#0064E0"
+            />
+          </svg>
+        )}
+
+        <h1 className="title">{name || 'Our Business'}</h1>
+        <div className="divider"></div>
+        <p className="subtitle">REVIEW US ON GOOGLE</p>
+
+        <div className="qr-wrapper">
+          <QRCodeSVG
+            value={getCustomerLink()}
+            size={220}
+            level="H"
+            fgColor={qrColor || '#000000'}
+            bgColor={qrBgColor || '#ffffff'}
+            imageSettings={logoUrl ? { src: logoUrl, height: 44, width: 44, excavate: true } : undefined}
+          />
+        </div>
+
+        <p className="footer-text">
+          POWERED BY<br />
+          <span style={{ color: '#d4af37', fontSize: '20px', fontWeight: 700, display: 'block', marginTop: '3px', letterSpacing: '2px' }}>
+            SHIVAM NEXTGEN
+          </span>
+        </p>
       </div>
 
       <div className="merchant-layout">
@@ -1568,7 +1612,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [language, setLanguage] = useState('English');
   const [loading, setLoading] = useState(false);
-  const [reviews, setReviews] = useState<string[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [selectedReviewIdx, setSelectedReviewIdx] = useState<number | null>(null);
 
   // Private low rating form state
@@ -1683,7 +1727,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
         business?.context || '',
         selectedRating,
         targetLanguage
-      );
+      ).map((text, idx) => ({ id: `demo_${idx}`, text }));
       setTimeout(() => {
         setReviews(mockReviews);
         setLoading(false);
@@ -1712,7 +1756,7 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
     }
   };
 
-  const handleCopyAndRedirect = async (text: string, idx: number) => {
+  const handleCopyAndRedirect = async (text: string, idx: number, revId?: string | null) => {
     setSelectedReviewIdx(idx);
 
     try {
@@ -1730,7 +1774,8 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
         body: JSON.stringify({
           rating,
           feedbackText: text,
-          customerContact: contact || ''
+          customerContact: contact || '',
+          stockReviewId: revId || undefined
         })
       });
     } catch (err) {
@@ -1914,29 +1959,33 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
               </div>
             ) : (
               <div className="review-options-grid">
-                {reviews.map((text, idx) => (
-                  <div
-                    key={idx}
-                    className={`review-card ${selectedReviewIdx === idx ? 'selected' : ''}`}
-                    onClick={() => handleCopyAndRedirect(text, idx)}
-                  >
-                    <p className="review-card-text">{text}</p>
-                    <div className="review-card-meta">
-                      <span>Option {idx + 1}</span>
-                      <span className="copy-badge">
-                        {selectedReviewIdx === idx ? (
-                          <>
-                            <Check size={12} /> Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={12} /> Copy & Go to Google
-                          </>
-                        )}
-                      </span>
+                {reviews.map((rev, idx) => {
+                  const text = typeof rev === 'string' ? rev : rev.text;
+                  const revId = typeof rev === 'string' ? null : rev.id;
+                  return (
+                    <div
+                      key={idx}
+                      className={`review-card ${selectedReviewIdx === idx ? 'selected' : ''}`}
+                      onClick={() => handleCopyAndRedirect(text, idx, revId)}
+                    >
+                      <p className="review-card-text">{text}</p>
+                      <div className="review-card-meta">
+                        <span>Option {idx + 1}</span>
+                        <span className="copy-badge">
+                          {selectedReviewIdx === idx ? (
+                            <>
+                              <Check size={12} /> Copied!
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={12} /> Copy & Go to Google
+                            </>
+                          )}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -2098,6 +2147,21 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const [subPaymentMethod, setSubPaymentMethod] = useState('UPI');
   const [subTxnId, setSubTxnId] = useState('');
 
+  // Stock reviews modal state
+  const [stockModal, setStockModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
+  const [stockData, setStockData] = useState<{
+    stockCounts: { '2': number; '3': number; '4': number; '5': number };
+    reviews: { _id: string; rating: number; reviewText: string; isUsed: boolean }[];
+  }>({
+    stockCounts: { '2': 0, '3': 0, '4': 0, '5': 0 },
+    reviews: []
+  });
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockGenerating, setStockGenerating] = useState(false);
+  const [newStockRating, setNewStockRating] = useState<number>(5);
+  const [newStockCount, setNewStockCount] = useState<number>(50);
+  const [stockFilterRating, setStockFilterRating] = useState<string>('all');
+
   useEffect(() => {
     fetchAdminData();
   }, []);
@@ -2159,6 +2223,63 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         showToast(data.isActive ? 'Access restored' : 'Access revoked');
       }
     } catch { showToast('Error toggling access.'); }
+  };
+
+  const fetchStockData = async (bizId: string) => {
+    setStockLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/business/${bizId}/stock`, {
+        credentials: 'include',
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStockData(data);
+      } else {
+        showToast('Failed to load stock reviews.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error connecting to server.');
+    } finally {
+      setStockLoading(false);
+    }
+  };
+
+  const handleOpenStockModal = (biz: any) => {
+    setStockModal({ show: true, bizId: biz._id, bizName: biz.name });
+    setNewStockRating(5);
+    setNewStockCount(50);
+    setStockFilterRating('all');
+    fetchStockData(biz._id);
+  };
+
+  const handleGenerateStockReviews = async () => {
+    if (newStockCount <= 0 || newStockCount > 200) {
+      showToast('Please enter a count between 1 and 200.');
+      return;
+    }
+    setStockGenerating(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/business/${stockModal.bizId}/generate-stock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        credentials: 'include',
+        body: JSON.stringify({ rating: newStockRating, count: newStockCount })
+      });
+      if (res.ok) {
+        showToast(`Successfully generated and added ${newStockCount} reviews to stock!`);
+        await fetchStockData(stockModal.bizId);
+      } else {
+        const errData = await res.json();
+        showToast(errData.error || 'Failed to generate stock reviews.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error generating reviews.');
+    } finally {
+      setStockGenerating(false);
+    }
   };
 
   const handleDeleteBusiness = async (id: string) => {
@@ -2489,6 +2610,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                           </button>
                           <button className="btn btn-outline" onClick={() => handleEditClick(biz)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', fontSize: '0.65rem' }} title="Full Edit Form">
                             <Settings size={12} />
+                          </button>
+                          <button className="btn btn-outline" onClick={() => handleOpenStockModal(biz)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', borderColor: 'var(--warning)', color: 'var(--warning)' }} title="Manage Stock Reviews">
+                            <MessageSquare size={12} />
                           </button>
                           <button className="btn btn-outline" onClick={() => handleDeleteBusiness(biz._id)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', color: 'var(--danger)' }} title="Delete Business">
                             <Trash2 size={12} />
@@ -3037,6 +3161,114 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
               <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubscribe}>Activate Plan</button>
               <button className="btn btn-secondary" onClick={() => setSubModal({ show: false, bizId: '', bizName: '' })}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stock Reviews Manager Modal */}
+      {stockModal.show && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setStockModal({ show: false, bizId: '', bizName: '' }); }}>
+          <div className="card fade-in" style={{ width: '100%', maxWidth: '680px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: '2rem', overflow: 'hidden' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Stock Reviews: {stockModal.bizName}</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+              Manage the pre-generated pool of reviews. Customers will select from these stock reviews when giving ratings (except 1-star which goes directly to private feedback).
+            </p>
+
+            {stockLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '3rem 0', gap: '0.75rem', flex: 1 }}>
+                <Loader2 size={24} className="spinner" color="var(--accent)" />
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading stock information...</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto', flex: 1, paddingRight: '0.5rem' }}>
+                
+                {/* Stock Counts Summary */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                  {[5, 4, 3, 2].map(rating => (
+                    <div key={rating} style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '2px', color: 'var(--warning)', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                        {rating} <Star size={12} fill="var(--warning)" style={{ strokeWidth: 1.5 }} />
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {stockData.stockCounts[rating.toString() as keyof typeof stockData.stockCounts] || 0}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>available</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Generate / Add Stock Form */}
+                <div style={{ border: '1px dashed var(--border-light)', padding: '1.25rem', borderRadius: 'var(--radius-md)', background: 'var(--bg-primary)' }}>
+                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem' }}>Add More Reviews to Stock</h4>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '120px' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Target Star Rating</label>
+                      <select className="form-select" value={newStockRating} onChange={(e) => setNewStockRating(Number(e.target.value))} style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
+                        <option value={5}>5 Stars</option>
+                        <option value={4}>4 Stars</option>
+                        <option value={3}>3 Stars</option>
+                        <option value={2}>2 Stars</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1, minWidth: '120px' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Number of Reviews</label>
+                      <input type="number" min={1} max={200} className="form-input" value={newStockCount} onChange={(e) => setNewStockCount(Number(e.target.value))} style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }} />
+                    </div>
+                    <button className="btn btn-accent" onClick={handleGenerateStockReviews} disabled={stockGenerating} style={{ padding: '0.6rem 1.5rem', minWidth: '160px', height: '40px', fontSize: '0.875rem' }}>
+                      {stockGenerating ? (
+                        <>
+                          <Loader2 size={14} className="spinner" /> Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={14} /> Generate Stock
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Current Stock Reviews List */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <h4 style={{ fontSize: '0.875rem', fontWeight: 600 }}>Available Reviews List</h4>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Filter by star:</span>
+                      <select className="form-select" value={stockFilterRating} onChange={(e) => setStockFilterRating(e.target.value)} style={{ padding: '0.25rem 1.5rem 0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto' }}>
+                        <option value="all">All Stars</option>
+                        <option value="5">5 Stars</option>
+                        <option value="4">4 Stars</option>
+                        <option value="3">3 Stars</option>
+                        <option value="2">2 Stars</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', maxHeight: '250px', overflowY: 'auto', background: 'var(--bg-secondary)' }}>
+                    {stockData.reviews.filter(r => stockFilterRating === 'all' || r.rating.toString() === stockFilterRating).length === 0 ? (
+                      <p style={{ color: 'var(--text-tertiary)', fontSize: '0.8125rem', textAlign: 'center', padding: '1.5rem' }}>No pre-generated reviews found for this rating.</p>
+                    ) : (
+                      stockData.reviews
+                        .filter(r => stockFilterRating === 'all' || r.rating.toString() === stockFilterRating)
+                        .map((r) => (
+                          <div key={r._id} style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-light)', padding: '0.75rem 1rem', fontSize: '0.8125rem', alignItems: 'flex-start', background: 'var(--bg-primary)' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'var(--warning-light)', color: 'var(--warning)', padding: '0.15rem 0.4rem', borderRadius: 'var(--radius-sm)', fontWeight: 600, flexShrink: 0 }}>
+                              {r.rating} <Star size={10} fill="var(--warning)" style={{ strokeWidth: 1.5 }} />
+                            </span>
+                            <p style={{ color: 'var(--text-primary)', margin: 0, flex: 1, lineHeight: '1.4' }}>{r.reviewText}</p>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
+              <button className="btn btn-secondary" onClick={() => setStockModal({ show: false, bizId: '', bizName: '' })}>Close</button>
             </div>
           </div>
         </div>
