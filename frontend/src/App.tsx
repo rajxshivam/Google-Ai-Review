@@ -1270,7 +1270,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
           )}
 
           {activeTab === 'qr' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div className="layout-2-col">
               <div className="card fade-in">
                 <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <QrCode size={20} color="var(--accent)" /> Review QR Code Flyer
@@ -1513,7 +1513,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div className="layout-2-col">
                 {/* Star Distribution Bar Chart */}
                 <div className="card">
                   <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 600 }}>Star Rating Distribution</h3>
@@ -2949,7 +2949,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-grid-2-col">
                   <div className="form-group">
                     <label className="form-label">Location</label>
                     <input type="text" className="form-input" value={location} onChange={(e) => setLocation(e.target.value)}
@@ -2989,7 +2989,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   {!editingId && (
                     <div style={{ borderTop: '1px solid var(--border-light)', marginTop: '1rem', paddingTop: '1rem' }}>
                       <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>MERCHANT ACCOUNT</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div className="form-grid-2-col">
                         <div className="form-group">
                           <label className="form-label">Merchant Email</label>
                           <input type="email" className="form-input" value={merchantEmail} onChange={(e) => setMerchantEmail(e.target.value)}

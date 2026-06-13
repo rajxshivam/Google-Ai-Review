@@ -823,6 +823,18 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.layout-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.form-grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
 @media (max-width: 900px) {
   .merchant-layout {
     flex-direction: column;
@@ -1043,6 +1055,15 @@ body {
   .form-grid-2-section {
     grid-template-columns: 1fr !important;
     gap: 1.5rem !important;
+  }
+
+  .layout-2-col {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
+
+  .form-grid-2-col {
+    grid-template-columns: 1fr !important;
   }
 
   .merchant-content {
