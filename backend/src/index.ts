@@ -54,6 +54,22 @@ mongoose.connect(MONGODB_URI)
     // Initialize isActive and isApproved for legacy business documents
     await Business.updateMany({ isActive: { $exists: false } }, { $set: { isActive: true } });
     await Business.updateMany({ isApproved: { $exists: false } }, { $set: { isApproved: true } });
+
+    // Restore any revoked subscriptions for currently active businesses
+    const activeBusinesses = await Business.find({ isActive: true }).select('_id');
+    const activeBusinessIds = activeBusinesses.map(b => b._id);
+    const now = new Date();
+    await Subscription.updateMany(
+      {
+        businessId: { $in: activeBusinessIds },
+        status: 'revoked',
+        $or: [
+          { endDate: null },
+          { endDate: { $gt: now } }
+        ]
+      },
+      { $set: { status: 'active' } }
+    );
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -918,10 +934,23 @@ app.put('/api/admin/business/:id/toggle-active', authMiddleware, requireRole('ad
     business.isActive = newActive;
     await business.save();
 
-    if (!newActive) {
+    if (newActive) {
+      const now = new Date();
+      await Subscription.updateMany(
+        {
+          businessId: id,
+          status: 'revoked',
+          $or: [
+            { endDate: null },
+            { endDate: { $gt: now } }
+          ]
+        },
+        { $set: { status: 'active' } }
+      );
+    } else {
       await Subscription.updateMany(
         { businessId: id, status: 'active' },
-        { status: 'revoked' }
+        { $set: { status: 'revoked' } }
       );
     }
 
