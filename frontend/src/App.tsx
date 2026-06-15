@@ -513,7 +513,17 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
   const [scansToday, setScansToday] = useState(0);
   const [loadingFeedbacks, setLoadingFeedbacks] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedbackFilter, setFeedbackFilter] = useState<'verified' | 'unverified' | 'all'>('verified');
+  const [feedbackFilter, setFeedbackFilter] = useState<'verified' | 'unverified'>('verified');
+  const [selectedReviewPopup, setSelectedReviewPopup] = useState<any | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const [googleRefreshToken, setGoogleRefreshToken] = useState('');
   const [googleAccountId, setGoogleAccountId] = useState('');
@@ -981,7 +991,10 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
         <aside className={`merchant-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
           <div className="sidebar-logo" onClick={() => { navigateTo('/admin'); setIsMobileMenuOpen(false); }}>
             <Sparkles size={22} />
-            <span>Review Our</span> Business
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.1' }}>
+              <span style={{ color: 'var(--accent)' }}>Review Our</span>
+              <span>Business</span>
+            </div>
           </div>
           <div className="sidebar-header">
             <h3>{name || 'Your Business'}</h3>
@@ -1418,136 +1431,153 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
           )}
 
           {activeTab === 'feedbacks' && (
-            <div className="card fade-in">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <MessageSquare size={20} color="var(--accent)" /> Customer Reviews
-                </h2>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() => businessId && fetchFeedbacks(businessId)}
-                  disabled={loadingFeedbacks}
-                >
-                  <RefreshCw size={14} className={loadingFeedbacks ? 'spinner' : ''} /> Refresh
-                </button>
+            <>
+              {/* Top KPI Cards (moved outside the reviews card) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ background: 'var(--accent-light)', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <QrCode size={22} color="var(--accent)" />
+                  </div>
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Scans Today</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{scansToday}</span>
+                  </div>
+                </div>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ background: 'var(--success-light)', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <MessageSquare size={22} color="var(--success)" />
+                  </div>
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Reviews</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{feedbacks.length}</span>
+                  </div>
+                </div>
               </div>
 
-              {(() => {
-                const displayedFeedbacks = feedbacks
-                  .filter(fb => {
-                    if (feedbackFilter === 'verified') return fb.isVerifiedOnGoogle;
-                    if (feedbackFilter === 'unverified') return !fb.isVerifiedOnGoogle;
-                    return true;
-                  })
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-                return (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1.5rem' }}>
-                      <div style={{ display: 'flex', gap: '1.5rem' }}>
-                        <div style={{ padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-secondary)' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Scans Today</span>
-                          <span style={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>{scansToday}</span>
-                        </div>
-                        <div style={{ padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', backgroundColor: 'var(--bg-secondary)' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Total Reviews</span>
-                          <span style={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>{feedbacks.length}</span>
-                        </div>
-                      </div>
-
-                      {/* Filter buttons */}
-                      <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-                        {[
-                          { key: 'verified', label: 'Verified' },
-                          { key: 'unverified', label: 'Unverified' },
-                          { key: 'all', label: 'All' }
-                        ].map((btn) => (
-                          <button
-                            key={btn.key}
-                            type="button"
-                            onClick={() => setFeedbackFilter(btn.key as any)}
-                            className="btn"
-                            style={{
-                              padding: '0.4rem 1rem',
-                              fontSize: '0.8125rem',
-                              borderRadius: 'var(--radius-sm)',
-                              background: feedbackFilter === btn.key ? 'var(--accent)' : 'transparent',
-                              color: feedbackFilter === btn.key ? '#fff' : 'var(--text-secondary)',
-                              border: 'none',
-                              boxShadow: 'none',
-                              fontWeight: feedbackFilter === btn.key ? 600 : 400,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {btn.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {feedbacks.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
-                        <ThumbsUp size={36} style={{ strokeWidth: 1.5, marginBottom: '1rem', color: 'var(--text-tertiary)' }} />
-                        <p>No reviews received yet. Share your QR code to get started!</p>
-                      </div>
-                    ) : displayedFeedbacks.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
-                        <p>No {feedbackFilter} reviews found.</p>
-                      </div>
-                    ) : (
-                      <div className="table-container">
-                        <table className="feedback-table">
-                          <thead>
-                            <tr>
-                              <th>Date & Time</th>
-                              <th>Rating</th>
-                              <th>Review Details</th>
-                              <th>Verification</th>
-                              <th>Mobile Number</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {displayedFeedbacks.map((fb) => (
-                        <tr key={fb._id || fb.id}>
-                          <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
-                            <div style={{ fontSize: '0.875rem' }}>{new Date(fb.createdAt).toLocaleDateString()}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{new Date(fb.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                          </td>
-                          <td>
-                            <span className={`rating-badge ${fb.rating <= 2 ? 'low' : fb.rating <= 3 ? 'mid' : 'high'}`}>
-                              <Star size={10} style={{ fill: 'currentColor' }} /> {fb.rating} Stars
-                            </span>
-                          </td>
-                          <td style={{ maxWidth: '400px' }}>
-                            <div>{fb.feedbackText}</div>
-                            {fb.googleReviewAuthorName && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                <GoogleLogoSvg /> <span>Google Reviewer: <strong>{fb.googleReviewAuthorName}</strong></span>
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            {fb.isVerifiedOnGoogle ? (
-                              <span className="copy-badge" style={{ color: 'var(--success)', backgroundColor: 'var(--success-light)', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
-                                <Check size={12} strokeWidth={3} /> Verified
-                              </span>
-                            ) : (
-                              <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>Unverified</span>
-                            )}
-                          </td>
-                          <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
-                            {fb.customerContact || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Not provided</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="card fade-in">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <MessageSquare size={20} color="var(--accent)" /> Customer Reviews
+                  </h2>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    onClick={() => businessId && fetchFeedbacks(businessId)}
+                    disabled={loadingFeedbacks}
+                  >
+                    <RefreshCw size={14} className={loadingFeedbacks ? 'spinner' : ''} /> Refresh
+                  </button>
                 </div>
-              )}
-                  </>
-                );
-              })()}
-            </div>
+
+                {(() => {
+                  const displayedFeedbacks = feedbacks
+                    .filter(fb => {
+                      if (feedbackFilter === 'verified') return fb.isVerifiedOnGoogle;
+                      if (feedbackFilter === 'unverified') return !fb.isVerifiedOnGoogle;
+                      return true;
+                    })
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                  return (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        {/* Filter buttons */}
+                        <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                          {[
+                            { key: 'verified', label: 'Verified' },
+                            { key: 'unverified', label: 'Unverified' }
+                          ].map((btn) => (
+                            <button
+                              key={btn.key}
+                              type="button"
+                              onClick={() => setFeedbackFilter(btn.key as any)}
+                              className="btn"
+                              style={{
+                                padding: '0.4rem 1rem',
+                                fontSize: '0.8125rem',
+                                borderRadius: 'var(--radius-sm)',
+                                background: feedbackFilter === btn.key ? 'var(--accent)' : 'transparent',
+                                color: feedbackFilter === btn.key ? '#fff' : 'var(--text-secondary)',
+                                border: 'none',
+                                boxShadow: 'none',
+                                fontWeight: feedbackFilter === btn.key ? 600 : 400,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {feedbacks.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+                          <ThumbsUp size={36} style={{ strokeWidth: 1.5, marginBottom: '1rem', color: 'var(--text-tertiary)' }} />
+                          <p>No reviews received yet. Share your QR code to get started!</p>
+                        </div>
+                      ) : displayedFeedbacks.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+                          <p>No {feedbackFilter} reviews found.</p>
+                        </div>
+                      ) : (
+                        <div className="table-container">
+                          <table className="feedback-table">
+                            <thead>
+                              <tr>
+                                <th>Date & Time</th>
+                                <th>Rating</th>
+                                <th>Review Details</th>
+                                <th>Verification</th>
+                                <th>Mobile Number</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {displayedFeedbacks.map((fb) => (
+                                <tr key={fb._id || fb.id} onClick={() => setSelectedReviewPopup(fb)} style={{ cursor: 'pointer' }}>
+                                  <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                                    <div style={{ fontSize: '0.875rem' }}>{new Date(fb.createdAt).toLocaleDateString()}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{new Date(fb.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                  </td>
+                                  <td>
+                                    <span className={`rating-badge ${fb.rating <= 2 ? 'low' : fb.rating <= 3 ? 'mid' : 'high'}`}>
+                                      <Star size={10} style={{ fill: 'currentColor' }} /> {fb.rating} Stars
+                                    </span>
+                                  </td>
+                                  <td style={{ maxWidth: '400px' }}>
+                                    <div>
+                                      {isMobile && fb.feedbackText.length > 60 
+                                        ? `${fb.feedbackText.slice(0, 60)}...` 
+                                        : fb.feedbackText
+                                      }
+                                    </div>
+                                    {fb.googleReviewAuthorName && (
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <GoogleLogoSvg /> <span>Google Reviewer: <strong>{fb.googleReviewAuthorName}</strong></span>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {fb.isVerifiedOnGoogle ? (
+                                      <span className="copy-badge" style={{ color: 'var(--success)', backgroundColor: 'var(--success-light)', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
+                                        <Check size={12} strokeWidth={3} /> Verified
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>Unverified</span>
+                                    )}
+                                  </td>
+                                  <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                    {fb.customerContact || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Not provided</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </>
           )}
 
           {activeTab === 'analytics' && (
@@ -1786,6 +1816,66 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
           animation: spin 1s linear infinite;
         }
       `}</style>
+
+      {/* Review Details Popup Modal */}
+      {selectedReviewPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedReviewPopup(null); }}>
+          <div className="card fade-in" style={{ width: '100%', maxWidth: '500px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0 }}>Review Details</h3>
+              <button onClick={() => setSelectedReviewPopup(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', color: 'var(--text-secondary)' }}>✕</button>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span className={`rating-badge ${selectedReviewPopup.rating <= 2 ? 'low' : selectedReviewPopup.rating <= 3 ? 'mid' : 'high'}`} style={{ fontSize: '0.875rem', padding: '0.3rem 0.6rem' }}>
+                <Star size={10} style={{ fill: 'currentColor' }} /> {selectedReviewPopup.rating} Stars
+              </span>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
+                <div>{new Date(selectedReviewPopup.createdAt).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{new Date(selectedReviewPopup.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', minHeight: '100px', lineHeight: '1.5', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+              {selectedReviewPopup.feedbackText}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem', fontSize: '0.875rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Google Verification:</span>
+                {selectedReviewPopup.isVerifiedOnGoogle ? (
+                  <span className="copy-badge" style={{ color: 'var(--success)', backgroundColor: 'var(--success-light)', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
+                    <Check size={12} strokeWidth={3} /> Verified
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>Unverified</span>
+                )}
+              </div>
+
+              {selectedReviewPopup.googleReviewAuthorName && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Google Author:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <GoogleLogoSvg /> {selectedReviewPopup.googleReviewAuthorName}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Customer Mobile:</span>
+                <span style={{ fontWeight: 500, color: selectedReviewPopup.customerContact ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: selectedReviewPopup.customerContact ? 'normal' : 'italic' }}>
+                  {selectedReviewPopup.customerContact || 'Not provided'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button className="btn btn-secondary" onClick={() => setSelectedReviewPopup(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2307,6 +2397,29 @@ interface SuperAdminProps {
   logout: () => void;
 }
 
+function Pagination({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  const pages: (number | string)[] = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== '...') {
+      pages.push('...');
+    }
+  }
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.25rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+      <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)} style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}>Prev</button>
+      {pages.map((p, i) => typeof p === 'string' ? (
+        <span key={`dots-${i}`} style={{ padding: '0.35rem 0.5rem', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>...</span>
+      ) : (
+        <button key={p} className={`btn btn-sm ${p === page ? 'btn-accent' : 'btn-outline'}`} onClick={() => onPageChange(p)} style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', minWidth: '32px' }}>{p}</button>
+      ))}
+      <button className="btn btn-outline btn-sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)} style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}>Next</button>
+    </div>
+  );
+}
+
 function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdminProps) {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -2357,13 +2470,32 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     businessRevenue: any[] 
   } | null>(null);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [bizPage, setBizPage] = useState(1);
+  const [bizTotalPages, setBizTotalPages] = useState(1);
+  const [fbPage, setFbPage] = useState(1);
+  const [fbTotalPages, setFbTotalPages] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
+  const [regPage, setRegPage] = useState(1);
+  const [regTotalPages, setRegTotalPages] = useState(1);
+  const [subPage, setSubPage] = useState(1);
+  const [subTotalPages, setSubTotalPages] = useState(1);
   const [subModal, setSubModal] = useState<{ show: boolean; bizId: string; bizName: string; regId?: string; isRenew?: boolean }>({ show: false, bizId: '', bizName: '' });
   const [subPlan, setSubPlan] = useState('yearly');
   const [subPaymentMethod, setSubPaymentMethod] = useState('UPI');
   const [subTxnId, setSubTxnId] = useState('');
+  const [subAmount, setSubAmount] = useState('999');
+  const [subNotes, setSubNotes] = useState('');
   const [revTimeframe, setRevTimeframe] = useState('month');
   const [revStartDate, setRevStartDate] = useState('');
   const [revEndDate, setRevEndDate] = useState('');
+
+  useEffect(() => {
+    if (subModal.show) {
+      setSubPlan('yearly');
+      setSubAmount('999');
+      setSubNotes('');
+    }
+  }, [subModal.show]);
 
   // Stock reviews modal state
   const [stockModal, setStockModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
@@ -2450,20 +2582,20 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     fetchRevenueData(revTimeframe, revStartDate, revEndDate);
   }, [revTimeframe, revStartDate, revEndDate]);
 
-  const fetchAdminData = async () => {
+  const fetchAdminData = async (bizP = bizPage, fbP = fbPage, usersP = usersPage, regP = regPage, subP = subPage) => {
     setLoading(true);
     try {
-      const bizRes = await fetch(`${API_BASE}/admin/businesses`, { credentials: 'include', headers: getAuthHeaders() });
-      const fbRes = await fetch(`${API_BASE}/admin/feedbacks`, { credentials: 'include', headers: getAuthHeaders() });
-      const usersRes = await fetch(`${API_BASE}/admin/users`, { credentials: 'include', headers: getAuthHeaders() });
-      const regRes = await fetch(`${API_BASE}/admin/registrations`, { credentials: 'include', headers: getAuthHeaders() });
-      if (bizRes.ok) setBusinesses(await bizRes.json());
-      if (fbRes.ok) setFeedbacks(await fbRes.json());
-      if (usersRes.ok) setUsers(await usersRes.json());
-      if (regRes.ok) setRegistrations(await regRes.json());
+      const bizRes = await fetch(`${API_BASE}/admin/businesses?page=${bizP}&limit=15`, { credentials: 'include', headers: getAuthHeaders() });
+      const fbRes = await fetch(`${API_BASE}/admin/feedbacks?page=${fbP}&limit=15`, { credentials: 'include', headers: getAuthHeaders() });
+      const usersRes = await fetch(`${API_BASE}/admin/users?page=${usersP}&limit=15`, { credentials: 'include', headers: getAuthHeaders() });
+      const regRes = await fetch(`${API_BASE}/admin/registrations?page=${regP}&limit=15`, { credentials: 'include', headers: getAuthHeaders() });
+      if (bizRes.ok) { const d = await bizRes.json(); setBusinesses(d.data); setBizTotalPages(d.pages); setBizPage(d.page); }
+      if (fbRes.ok) { const d = await fbRes.json(); setFeedbacks(d.data); setFbTotalPages(d.pages); setFbPage(d.page); }
+      if (usersRes.ok) { const d = await usersRes.json(); setUsers(d.data); setUsersPage(d.page); }
+      if (regRes.ok) { const d = await regRes.json(); setRegistrations(d.data); setRegTotalPages(d.pages); setRegPage(d.page); }
 
-      const subRes = await fetch(`${API_BASE}/admin/subscriptions`, { credentials: 'include', headers: getAuthHeaders() });
-      if (subRes.ok) setSubscriptions(await subRes.json());
+      const subRes = await fetch(`${API_BASE}/admin/subscriptions?page=${subP}&limit=15`, { credentials: 'include', headers: getAuthHeaders() });
+      if (subRes.ok) { const d = await subRes.json(); setSubscriptions(d.data); setSubTotalPages(d.pages); setSubPage(d.page); }
 
       fetchSalesPeople();
     } catch (err) {
@@ -2790,15 +2922,16 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
           setBusinesses(prev => prev.map(b => b._id === editingId ? data : b));
           showToast('Business details updated!');
           setEditingId(null);
+          setActiveTab('businesses');
         } else {
-          setBusinesses(prev => [data.business || data, ...prev]);
-          showToast('Business registered successfully!');
+          showToast('Registration request created successfully!');
+          fetchAdminData();
+          setActiveTab('registrations');
         }
         setName(''); setCategory('Restaurant'); setContext(''); setGoogleReviewUrl('');
         setKeywords(''); setLocation(''); setMobileNumber('');
         setIsApproved(false); setMerchantEmail(''); setMerchantPassword('');
         setSalesPersonId('');
-        setActiveTab('businesses');
       }
     } catch (err) {
       console.error(err);
@@ -2854,13 +2987,13 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   };
 
   // Registration handlers
-  const handleApproveRegistration = async (regId: string, plan: string, paymentMethod: string, transactionId?: string) => {
+  const handleApproveRegistration = async (regId: string, plan: string, paymentMethod: string, transactionId?: string, amount?: number, notes?: string) => {
     try {
       const res = await fetch(`${API_BASE}/admin/registrations/${regId}/approve`, {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ plan, paymentMethod, transactionId })
+        body: JSON.stringify({ plan, paymentMethod, transactionId, amount, notes })
       });
       if (res.ok) {
         showToast(`Registration approved! Business created and plan activated.`);
@@ -2893,19 +3026,21 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleSubscribe = async () => {
     try {
       if (subModal.regId) {
-        await handleApproveRegistration(subModal.regId, subPlan, subPaymentMethod, subTxnId);
+        await handleApproveRegistration(subModal.regId, subPlan, subPaymentMethod, subTxnId, Number(subAmount), subNotes);
         setSubModal({ show: false, bizId: '', bizName: '' });
         setSubTxnId('');
+        setSubNotes('');
         return;
       }
       const res = await fetch(`${API_BASE}/admin/subscribe`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include',
-        body: JSON.stringify({ businessId: subModal.bizId, plan: subPlan, paymentMethod: subPaymentMethod, transactionId: subTxnId })
+        body: JSON.stringify({ businessId: subModal.bizId, plan: subPlan, paymentMethod: subPaymentMethod, transactionId: subTxnId, amount: Number(subAmount), notes: subNotes })
       });
       if (res.ok) {
         showToast(subModal.isRenew ? 'Subscription renewed successfully!' : 'Subscription activated!');
         setSubModal({ show: false, bizId: '', bizName: '' });
         setSubTxnId('');
+        setSubNotes('');
         fetchAdminData();
       } else {
         const data = await res.json();
@@ -2948,7 +3083,10 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       <aside className={`super-admin-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-logo" onClick={() => { navigateTo('/admin'); setIsMobileMenuOpen(false); }}>
           <Sparkles size={22} />
-          <span>Review Our</span> Business
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.1' }}>
+            <span style={{ color: 'var(--accent)' }}>Review Our</span>
+            <span>Business</span>
+          </div>
         </div>
         <div className="sidebar-header">
           <div className="copy-badge" style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', display: 'inline-flex', width: 'fit-content' }}>
@@ -3039,7 +3177,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         <div className="card fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h3>Registered Partnerships</h3>
-            <button className="btn btn-outline btn-sm" onClick={fetchAdminData} disabled={loading}>
+            <button className="btn btn-outline btn-sm" onClick={() => fetchAdminData()} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'spinner' : ''} /> Refresh
             </button>
           </div>
@@ -3200,6 +3338,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </table>
             </div>
           )}
+          <Pagination page={bizPage} totalPages={bizTotalPages} onPageChange={(p) => fetchAdminData(p, fbPage, usersPage, regPage, subPage)} />
         </div>
       )}
 
@@ -3207,7 +3346,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         <div className="card fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h3>Merchant Registration Requests</h3>
-            <button className="btn btn-outline btn-sm" onClick={fetchAdminData} disabled={loading}>
+            <button className="btn btn-outline btn-sm" onClick={() => fetchAdminData()} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'spinner' : ''} /> Refresh
             </button>
           </div>
@@ -3374,13 +3513,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                     </div>
                   )}
 
-                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
-                    <input type="checkbox" id="isApproved" checked={isApproved} onChange={(e) => setIsApproved(e.target.checked)}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
-                    <label htmlFor="isApproved" style={{ fontWeight: 500, fontSize: '0.9375rem', cursor: 'pointer' }}>
-                      Approve and Activate this business portal immediately
-                    </label>
-                  </div>
+
                 </div>
 
                 <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto' }}>
@@ -3394,6 +3527,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </div>
             </div>
           </form>
+          <Pagination page={regPage} totalPages={regTotalPages} onPageChange={(p) => fetchAdminData(bizPage, fbPage, usersPage, p, subPage)} />
         </div>
       )}
 
@@ -3401,7 +3535,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         <div className="card fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h3>System-Wide Private Feedback Log</h3>
-            <button className="btn btn-outline btn-sm" onClick={fetchAdminData} disabled={loading}>
+            <button className="btn btn-outline btn-sm" onClick={() => fetchAdminData()} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'spinner' : ''} /> Refresh
             </button>
           </div>
@@ -3457,6 +3591,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </table>
             </div>
           )}
+          <Pagination page={fbPage} totalPages={fbTotalPages} onPageChange={(p) => fetchAdminData(bizPage, p, usersPage, regPage, subPage)} />
         </div>
       )}
 
@@ -3588,7 +3723,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                         }}
                         formatter={(value, name) => [
                           `₹${Number(value).toLocaleString('en-IN')}`,
-                          name === 'revenue' ? 'Revenue' : 'Net Profit'
+                          name
                         ]}
                       />
                       <Legend verticalAlign="top" height={36} />
@@ -3651,7 +3786,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h4>Subscription History</h4>
-            <button className="btn btn-outline btn-sm" onClick={fetchAdminData} disabled={loading}>
+            <button className="btn btn-outline btn-sm" onClick={() => fetchAdminData()} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'spinner' : ''} /> Refresh
             </button>
           </div>
@@ -3666,6 +3801,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                     <th>Business</th>
                     <th>Plan</th>
                     <th>Amount</th>
+                    <th>Notes</th>
                     <th>Activated</th>
                     <th>Expiry</th>
                     <th>Status</th>
@@ -3681,8 +3817,14 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                           backgroundColor: sub.plan === 'lifetime' ? 'var(--warning)' : 'var(--accent)',
                           color: '#fff', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', textTransform: 'uppercase'
                         }}>
-                          {sub.plan} — ₹{sub.amount.toLocaleString('en-IN')}
+                          {sub.plan}
                         </span>
+                      </td>
+                      <td style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                        ₹{(sub.amount || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ fontSize: '0.8125rem', color: sub.notes ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: sub.notes ? 'normal' : 'italic', maxWidth: '180px', wordBreak: 'break-all' }}>
+                        {sub.notes || '—'}
                       </td>
                       <td style={{ fontSize: '0.8125rem' }}>{sub.startDate ? new Date(sub.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
                       <td style={{ fontSize: '0.8125rem' }}>{sub.plan === 'lifetime' ? 'Never' : sub.endDate ? new Date(sub.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
@@ -3737,6 +3879,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </table>
             </div>
           )}
+          <Pagination page={subPage} totalPages={subTotalPages} onPageChange={(p) => fetchAdminData(bizPage, fbPage, usersPage, regPage, p)} />
 
           <div style={{ borderTop: '1px solid var(--border)', marginTop: '1.5rem', paddingTop: '1.5rem' }}>
             <h4 style={{ marginBottom: '1rem' }}>Plan Pricing</h4>
@@ -4097,10 +4240,20 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
             <div className="form-group">
               <label className="form-label">Select Plan</label>
-              <select className="form-select" value={subPlan} onChange={(e) => setSubPlan(e.target.value)}>
+              <select className="form-select" value={subPlan} onChange={(e) => {
+                const plan = e.target.value;
+                setSubPlan(plan);
+                setSubAmount(plan === 'yearly' ? '999' : '1499');
+              }}>
                 <option value="yearly">Yearly (₹999/yr)</option>
                 <option value="lifetime">Lifetime (₹1,499 one-time)</option>
               </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Payment Amount (₹)</label>
+              <input type="number" min="0" className="form-input" value={subAmount} onChange={(e) => setSubAmount(e.target.value)}
+                placeholder={subPlan === 'yearly' ? '999' : '1499'} required />
             </div>
 
             <div className="form-group">
@@ -4118,6 +4271,12 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <label className="form-label">Transaction ID (optional)</label>
               <input type="text" className="form-input" value={subTxnId} onChange={(e) => setSubTxnId(e.target.value)}
                 placeholder="e.g. UPI txn reference" />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Notes / Reason (optional)</label>
+              <textarea className="form-textarea" value={subNotes} onChange={(e) => setSubNotes(e.target.value)}
+                placeholder="e.g. He is our relative, discounted plan" rows={2} />
             </div>
 
             {subModal.regId && (

@@ -183,10 +183,16 @@ app.get('/api/auth/me', authMiddleware, async (req: AuthRequest, res: Response) 
   }
 });
 
-app.get('/api/admin/users', authMiddleware, requireRole('admin'), async (_req: AuthRequest, res: Response) => {
+app.get('/api/admin/users', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
-    const users = await User.find().populate('businessId', 'name').sort({ createdAt: -1 });
-    return res.status(200).json(users);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const [users, total] = await Promise.all([
+      User.find().populate('businessId', 'name').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      User.countDocuments()
+    ]);
+    return res.status(200).json({ data: users, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
@@ -235,10 +241,16 @@ app.post('/api/auth/register-merchant', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/admin/registrations', authMiddleware, requireRole('admin'), async (_req: AuthRequest, res: Response) => {
+app.get('/api/admin/registrations', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
-    const registrations = await Registration.find().sort({ createdAt: -1 }).populate('salesPersonId');
-    return res.status(200).json(registrations);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const [registrations, total] = await Promise.all([
+      Registration.find().sort({ createdAt: -1 }).populate('salesPersonId').skip(skip).limit(limit),
+      Registration.countDocuments()
+    ]);
+    return res.status(200).json({ data: registrations, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
@@ -247,7 +259,7 @@ app.get('/api/admin/registrations', authMiddleware, requireRole('admin'), async 
 app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { plan, paymentMethod, transactionId, salesPersonId } = req.body;
+    const { plan, paymentMethod, transactionId, salesPersonId, amount, notes } = req.body;
 
     if (!plan || !['yearly', 'lifetime'].includes(plan)) {
       return res.status(400).json({ error: 'Plan is required and must be yearly or lifetime.' });
@@ -260,7 +272,7 @@ app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('adm
     if (!reg) return res.status(404).json({ error: 'Registration not found.' });
 
     const finalSalesPersonId = salesPersonId !== undefined ? (salesPersonId || null) : reg.salesPersonId;
-    const amount = PLAN_PRICES[plan] || 0;
+    const finalAmount = amount !== undefined && amount !== null ? Number(amount) : (PLAN_PRICES[plan] || 0);
     const now = new Date();
     const endDate = plan === 'yearly' ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()) : null;
 
@@ -278,8 +290,9 @@ app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('adm
 
     // Create subscription
     await Subscription.create({
-      businessId: business._id, plan, amount, currency: 'INR',
+      businessId: business._id, plan, amount: finalAmount, currency: 'INR',
       paymentMethod: paymentMethod || '', transactionId: transactionId || '',
+      notes: notes || '',
       status: 'active', startDate: now, endDate
     });
 
@@ -799,7 +812,14 @@ app.get('/api/business/:id/feedbacks', authMiddleware, async (req: AuthRequest, 
       return res.status(400).json({ error: 'Invalid Business ID format.' });
     }
 
-    const feedbacks = await Feedback.find({ businessId: id }).sort({ createdAt: -1 });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find({ businessId: id }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Feedback.countDocuments({ businessId: id })
+    ]);
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -809,7 +829,7 @@ app.get('/api/business/:id/feedbacks', authMiddleware, async (req: AuthRequest, 
       createdAt: { $gte: startOfToday }
     });
 
-    return res.status(200).json({ feedbacks, scansToday });
+    return res.status(200).json({ feedbacks, scansToday, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Error in GET /api/business/:id/feedbacks:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
@@ -959,8 +979,14 @@ Return the suggestions formatted strictly as a single JSON array of strings, lik
 // 1. Get all businesses
 app.get('/api/admin/businesses', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const businesses = await Business.find().sort({ createdAt: -1 }).populate('salesPersonId');
-    return res.status(200).json(businesses);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const [businesses, total] = await Promise.all([
+      Business.find().sort({ createdAt: -1 }).populate('salesPersonId').skip(skip).limit(limit),
+      Business.countDocuments()
+    ]);
+    return res.status(200).json({ data: businesses, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Error in GET /api/admin/businesses:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
@@ -970,47 +996,32 @@ app.get('/api/admin/businesses', authMiddleware, requireRole('admin'), async (re
 // 2. Create a business (with optional isApproved status) + merchant account
 app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
-    const { name, category, context, googleReviewUrl, keywords, isApproved, email, password, location, mobileNumber, logoUrl, salesPersonId } = req.body;
+    const { name, category, context, googleReviewUrl, email, password, location, mobileNumber, salesPersonId } = req.body;
 
-    if (!name || !category || !context || !googleReviewUrl) {
-      return res.status(400).json({ error: 'All fields are required.' });
+    if (!name || !category || !context || !googleReviewUrl || !email || !password) {
+      return res.status(400).json({ error: 'Business name, category, context, google review url, email, and password are all required.' });
     }
 
-    const keywordsArray = Array.isArray(keywords)
-      ? keywords.map((k: string) => k.trim()).filter((k: string) => k.length > 0)
-      : typeof keywords === 'string'
-        ? keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0)
-        : [];
+    const existingUser = await User.findOne({ email });
+    const existingReg = await Registration.findOne({ email });
+    if (existingUser || existingReg) {
+      return res.status(400).json({ error: 'Email already registered.' });
+    }
 
-    const business = new Business({
+    const registration = await Registration.create({
       name,
       category,
       context,
       googleReviewUrl,
-      keywords: keywordsArray,
       location: location || '',
       mobileNumber: mobileNumber || '',
-      isApproved: isApproved === undefined ? false : isApproved,
-      logoUrl: logoUrl || '',
+      email,
+      password,
+      status: 'pending',
       salesPersonId: salesPersonId || null
     });
 
-    await business.save();
-
-    // Create merchant user account if email/password provided
-    let merchantUser = null;
-    if (email && password) {
-      const existingUser = await User.findOne({ email });
-      if (!existingUser) {
-        merchantUser = await User.create({ email, password, role: 'merchant', businessId: business._id });
-      }
-    }
-
-    if (business.isApproved) {
-      initializeBusinessStock(business);
-    }
-
-    return res.status(201).json({ business, merchantUser: merchantUser ? { _id: merchantUser._id, email: merchantUser.email } : null });
+    return res.status(201).json({ message: 'Registration request created successfully.', registration });
   } catch (error) {
     console.error('Error in POST /api/admin/business:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
@@ -1121,10 +1132,14 @@ app.delete('/api/admin/business/:id', authMiddleware, requireRole('admin'), asyn
 // 6. Get all feedbacks system-wide
 app.get('/api/admin/feedbacks', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const feedbacks = await Feedback.find()
-      .populate('businessId', 'name')
-      .sort({ createdAt: -1 });
-    return res.status(200).json(feedbacks);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find().populate('businessId', 'name').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Feedback.countDocuments()
+    ]);
+    return res.status(200).json({ data: feedbacks, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Error in GET /api/admin/feedbacks:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
@@ -1230,7 +1245,7 @@ app.put('/api/business/:id/qr-settings', authMiddleware, async (req: AuthRequest
 
 app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const { businessId, plan, paymentMethod, transactionId } = req.body;
+    const { businessId, plan, paymentMethod, transactionId, amount, notes } = req.body;
     if (!businessId || !plan) {
       return res.status(400).json({ error: 'businessId and plan are required.' });
     }
@@ -1246,13 +1261,14 @@ app.post('/api/admin/subscribe', authMiddleware, requireRole('admin'), async (re
       return res.status(404).json({ error: 'Business not found.' });
     }
 
-    const amount = PLAN_PRICES[plan] || 0;
+    const finalAmount = amount !== undefined && amount !== null ? Number(amount) : (PLAN_PRICES[plan] || 0);
     const now = new Date();
     const endDate = plan === 'yearly' ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()) : null;
 
     const subscription = await Subscription.create({
-      businessId, plan, amount, currency: 'INR',
+      businessId, plan, amount: finalAmount, currency: 'INR',
       paymentMethod: paymentMethod || '', transactionId: transactionId || '',
+      notes: notes || '',
       status: 'active', startDate: now, endDate
     });
 
@@ -1311,11 +1327,17 @@ app.put('/api/admin/business/:id/toggle-active', authMiddleware, requireRole('ad
   }
 });
 
-app.get('/api/admin/subscriptions', authMiddleware, requireRole('admin'), async (_req: Request, res: Response) => {
+app.get('/api/admin/subscriptions', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     await expireExpiredSubscriptions();
-    const subs = await Subscription.find().populate('businessId', 'name').sort({ createdAt: -1 });
-    return res.status(200).json(subs);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+    const [subs, total] = await Promise.all([
+      Subscription.find().populate('businessId', 'name').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Subscription.countDocuments()
+    ]);
+    return res.status(200).json({ data: subs, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }

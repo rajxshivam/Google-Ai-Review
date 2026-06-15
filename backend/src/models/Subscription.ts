@@ -10,6 +10,7 @@ export interface ISubscription extends Document {
   status: 'active' | 'revoked' | 'expired';
   startDate: Date;
   endDate: Date | null;
+  notes?: string;
   createdAt: Date;
 }
 
@@ -23,6 +24,7 @@ const SubscriptionSchema = new Schema<ISubscription>({
   status: { type: String, enum: ['active', 'revoked', 'expired'], default: 'active' },
   startDate: { type: Date, default: Date.now },
   endDate: { type: Date, default: null },
+  notes: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 

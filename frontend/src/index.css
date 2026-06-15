@@ -91,6 +91,7 @@ body {
   letter-spacing: -0.025em;
   text-decoration: none;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .app-logo span {
@@ -681,6 +682,7 @@ body {
   letter-spacing: -0.025em;
   cursor: pointer;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .merchant-sidebar .sidebar-logo span {
@@ -862,6 +864,7 @@ body {
     font-size: 1.1rem;
     color: var(--text-primary);
     cursor: pointer;
+    white-space: nowrap;
   }
 
   .mobile-header-logo span {
@@ -974,6 +977,7 @@ body {
     font-size: 1.125rem;
     color: var(--text-primary);
     letter-spacing: -0.025em;
+    white-space: nowrap;
   }
 
   .super-admin-sidebar .sidebar-logo span {
