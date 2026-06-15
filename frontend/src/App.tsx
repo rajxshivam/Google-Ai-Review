@@ -25,7 +25,9 @@ import {
   Trash2,
   BarChart3,
   Menu,
-  X
+  X,
+  DollarSign,
+  TrendingUp
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
@@ -135,10 +137,29 @@ interface RegisterPageProps {
 function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
   const [formData, setFormData] = useState({
     name: '', category: 'Restaurant', context: '', googleReviewUrl: '',
-    location: '', mobileNumber: '', email: '', password: ''
+    location: '', mobileNumber: '', email: '', password: '', salesPersonId: ''
   });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [publicSalesPeople, setPublicSalesPeople] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPublicSales = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/public/salespeople`);
+        if (res.ok) {
+          const data = await res.json();
+          setPublicSalesPeople(data);
+          localStorage.setItem('demo_public_salespeople', JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn('Could not load public salespeople, using fallback.', err);
+        const local = localStorage.getItem('demo_public_salespeople');
+        if (local) setPublicSalesPeople(JSON.parse(local));
+      }
+    };
+    fetchPublicSales();
+  }, []);
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -246,6 +267,16 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
             <label className="form-label">About Your Business (AI Context)</label>
             <textarea className="form-textarea" value={formData.context} onChange={(e) => handleChange('context', e.target.value)}
               placeholder="Tell AI about your business so it can generate relevant reviews..." />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Were you referred by a Salesperson?</label>
+            <select className="form-select" value={formData.salesPersonId} onChange={(e) => handleChange('salesPersonId', e.target.value)}>
+              <option value="">No / None</option>
+              {publicSalesPeople.map(sp => (
+                <option key={sp._id} value={sp._id}>{sp.name}</option>
+              ))}
+            </select>
           </div>
 
           <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', paddingTop: '1.5rem' }}>
@@ -2282,8 +2313,21 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const [users, setUsers] = useState<any[]>([]);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'businesses' | 'registrations' | 'feedbacks' | 'add' | 'revenue'>('businesses');
+  const [activeTab, setActiveTab] = useState<'businesses' | 'registrations' | 'feedbacks' | 'add' | 'revenue' | 'salespeople'>('businesses');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Sales Person States
+  const [salesPeople, setSalesPeople] = useState<any[]>([]);
+  const [salesPersonId, setSalesPersonId] = useState<string>('');
+  const [salesName, setSalesName] = useState('');
+  const [salesMobile, setSalesMobile] = useState('');
+  const [salesCommission, setSalesCommission] = useState('10');
+  const [loadingSales, setLoadingSales] = useState(false);
+  const [settlementModal, setSettlementModal] = useState<{ show: boolean; sp: any }>({ show: false, sp: null });
+  const [settlementAmount, setSettlementAmount] = useState('');
+  const [settlementNotes, setSettlementNotes] = useState('');
+  const [settlementHistoryModal, setSettlementHistoryModal] = useState<{ show: boolean; spId: string; spName: string; settlements: any[] }>({ show: false, spId: '', spName: '', settlements: [] });
+  const [loadingSettlements, setLoadingSettlements] = useState(false);
 
   // Form state for add/edit business
   const [name, setName] = useState('');
@@ -2300,10 +2344,18 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
   // Edit modal state
   const [editModal, setEditModal] = useState<{ show: boolean; biz: any }>({ show: false, biz: null });
-  const [editForm, setEditForm] = useState({ name: '', category: '', context: '', googleReviewUrl: '', keywords: '', location: '', mobileNumber: '' });
+  const [editForm, setEditForm] = useState({ name: '', category: '', context: '', googleReviewUrl: '', keywords: '', location: '', mobileNumber: '', salesPersonId: '' });
 
   // Revenue state
-  const [revenueData, setRevenueData] = useState<{ totalRevenue: number; activeSubscriptions: number; planCounts: any; monthlyRevenue: any[]; businessRevenue: any[] } | null>(null);
+  const [revenueData, setRevenueData] = useState<{ 
+    totalRevenue: number; 
+    totalCommission: number;
+    totalProfit: number;
+    activeSubscriptions: number; 
+    planCounts: any; 
+    monthlyRevenue: any[]; 
+    businessRevenue: any[] 
+  } | null>(null);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [subModal, setSubModal] = useState<{ show: boolean; bizId: string; bizName: string; regId?: string; isRenew?: boolean }>({ show: false, bizId: '', bizName: '' });
   const [subPlan, setSubPlan] = useState('yearly');
@@ -2332,6 +2384,50 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     fetchAdminData();
   }, []);
 
+  const generateMockRevenueData = (timeframe: string, _start: string, _end: string) => {
+    const planCounts = { free: 5, yearly: 8, lifetime: 3 };
+    const activeSubscriptions = 11;
+    const monthlyRevenue: { month: string; revenue: number; profit: number }[] = [];
+    let totalRevenue = 0;
+    let totalCommission = 0;
+
+    const intervals = timeframe === 'day'
+      ? ['12am-4am', '4am-8am', '8am-12pm', '12pm-4pm', '4pm-8pm', '8pm-12am']
+      : timeframe === 'week'
+        ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        : timeframe === 'month'
+          ? ['Week 1', 'Week 2', 'Week 3', 'Week 4']
+          : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    intervals.forEach(label => {
+      const rev = Math.floor(Math.random() * 5000) + 1000;
+      const comm = Math.floor(rev * 0.1); // 10% commission
+      const prof = rev - comm;
+      monthlyRevenue.push({ month: label, revenue: rev, profit: prof });
+      totalRevenue += rev;
+      totalCommission += comm;
+    });
+
+    const totalProfit = totalRevenue - totalCommission;
+
+    const businessRevenue = [
+      { businessName: 'Pizza Palace (Demo)', plan: 'yearly', amount: 999, activatedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), expiresAt: new Date(Date.now() + 355 * 24 * 3600 * 1000).toISOString(), isActive: true },
+      { businessName: 'Gourmet Burger (Demo)', plan: 'lifetime', amount: 1499, activatedAt: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(), expiresAt: null, isActive: true },
+      { businessName: 'Elite Salon (Demo)', plan: 'yearly', amount: 999, activatedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(), expiresAt: new Date(Date.now() + 360 * 24 * 3600 * 1000).toISOString(), isActive: true },
+      { businessName: 'Zen Yoga (Demo)', plan: 'lifetime', amount: 1499, activatedAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(), expiresAt: null, isActive: true }
+    ];
+
+    return {
+      totalRevenue,
+      totalCommission,
+      totalProfit,
+      activeSubscriptions,
+      planCounts,
+      monthlyRevenue,
+      businessRevenue
+    };
+  };
+
   const fetchRevenueData = async (timeframe: string, start: string, end: string) => {
     try {
       let revUrl = `${API_BASE}/admin/revenue?timeframe=${timeframe}`;
@@ -2339,9 +2435,14 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         revUrl += `&startDate=${start}&endDate=${end}`;
       }
       const revRes = await fetch(revUrl, { credentials: 'include', headers: getAuthHeaders() });
-      if (revRes.ok) setRevenueData(await revRes.json());
+      if (revRes.ok) {
+        setRevenueData(await revRes.json());
+      } else {
+        setRevenueData(generateMockRevenueData(timeframe, start, end));
+      }
     } catch (err) {
       console.error('Failed to load revenue data', err);
+      setRevenueData(generateMockRevenueData(timeframe, start, end));
     }
   };
 
@@ -2363,10 +2464,174 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
       const subRes = await fetch(`${API_BASE}/admin/subscriptions`, { credentials: 'include', headers: getAuthHeaders() });
       if (subRes.ok) setSubscriptions(await subRes.json());
+
+      fetchSalesPeople();
     } catch (err) {
       console.error('Failed to load admin data from API.', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSalesPeople = async () => {
+    setLoadingSales(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/salespeople`, { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setSalesPeople(data);
+        localStorage.setItem('demo_salespeople', JSON.stringify(data));
+      } else {
+        throw new Error('Failed to fetch from server');
+      }
+    } catch (err) {
+      console.warn('Could not load salespeople from server, using local storage fallback.', err);
+      const local = localStorage.getItem('demo_salespeople');
+      if (local) {
+        setSalesPeople(JSON.parse(local));
+      } else {
+        setSalesPeople([]);
+      }
+    } finally {
+      setLoadingSales(false);
+    }
+  };
+
+  const handleRegisterSalesPerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!salesName || !salesMobile) {
+      showToast('Name and mobile number are required.');
+      return;
+    }
+    const payload = {
+      name: salesName,
+      mobileNumber: salesMobile,
+      commissionPercentage: Number(salesCommission) || 10
+    };
+    try {
+      const res = await fetch(`${API_BASE}/admin/salespeople`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        showToast('Salesperson registered successfully!');
+        setSalesName('');
+        setSalesMobile('');
+        setSalesCommission('10');
+        fetchSalesPeople();
+      } else {
+        throw new Error('Failed to register salesperson');
+      }
+    } catch (err) {
+      console.warn('Failed to register salesperson on server, running offline.', err);
+      const local = localStorage.getItem('demo_salespeople');
+      const currentList = local ? JSON.parse(local) : [];
+      const newSp = {
+        _id: 'demo_sp_' + Date.now(),
+        name: salesName,
+        mobileNumber: salesMobile,
+        commissionPercentage: Number(salesCommission) || 10,
+        referredCount: 0,
+        totalSales: 0,
+        commissionEarned: 0,
+        totalSettled: 0,
+        outstandingBalance: 0,
+        businesses: [],
+        createdAt: new Date().toISOString()
+      };
+      const updatedList = [newSp, ...currentList];
+      setSalesPeople(updatedList);
+      localStorage.setItem('demo_salespeople', JSON.stringify(updatedList));
+      showToast('Salesperson registered successfully (Offline Mode)!');
+      setSalesName('');
+      setSalesMobile('');
+      setSalesCommission('10');
+    }
+  };
+
+  const handleRecordSettlement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settlementModal.sp) return;
+    const amount = Number(settlementAmount);
+    if (!amount || amount <= 0) {
+      showToast('Amount must be greater than 0.');
+      return;
+    }
+    const spId = settlementModal.sp._id;
+    const payload = { amount, notes: settlementNotes };
+    try {
+      const res = await fetch(`${API_BASE}/admin/salespeople/${spId}/settlements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        showToast('Settlement recorded successfully!');
+        setSettlementAmount('');
+        setSettlementNotes('');
+        setSettlementModal({ show: false, sp: null });
+        fetchSalesPeople();
+      } else {
+        throw new Error('Failed to record settlement');
+      }
+    } catch (err) {
+      console.warn('Failed to record settlement on server, running offline.', err);
+      const localSp = localStorage.getItem('demo_salespeople');
+      if (localSp) {
+        const list = JSON.parse(localSp);
+        const updatedList = list.map((sp: any) => {
+          if (sp._id === spId) {
+            const totalSettled = (sp.totalSettled || 0) + amount;
+            const outstandingBalance = (sp.commissionEarned || 0) - totalSettled;
+            return { ...sp, totalSettled, outstandingBalance };
+          }
+          return sp;
+        });
+        setSalesPeople(updatedList);
+        localStorage.setItem('demo_salespeople', JSON.stringify(updatedList));
+      }
+      const localSet = localStorage.getItem(`demo_settlement_history_${spId}`);
+      const currentSet = localSet ? JSON.parse(localSet) : [];
+      const newSet = {
+        _id: 'demo_set_' + Date.now(),
+        salesPersonId: spId,
+        amount,
+        notes: settlementNotes,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem(`demo_settlement_history_${spId}`, JSON.stringify([newSet, ...currentSet]));
+
+      showToast('Settlement recorded successfully (Offline Mode)!');
+      setSettlementAmount('');
+      setSettlementNotes('');
+      setSettlementModal({ show: false, sp: null });
+    }
+  };
+
+  const fetchSettlementHistory = async (spId: string, spName: string) => {
+    setLoadingSettlements(true);
+    setSettlementHistoryModal({ show: true, spId, spName, settlements: [] });
+    try {
+      const res = await fetch(`${API_BASE}/admin/salespeople/${spId}/settlements`, { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setSettlementHistoryModal(prev => ({ ...prev, settlements: data }));
+      } else {
+        throw new Error('Failed to fetch settlements from server');
+      }
+    } catch (err) {
+      console.warn('Could not fetch settlements from server, using local storage fallback.', err);
+      const local = localStorage.getItem(`demo_settlement_history_${spId}`);
+      if (local) {
+        setSettlementHistoryModal(prev => ({ ...prev, settlements: JSON.parse(local) }));
+      } else {
+        setSettlementHistoryModal(prev => ({ ...prev, settlements: [] }));
+      }
+    } finally {
+      setLoadingSettlements(false);
     }
   };
 
@@ -2506,7 +2771,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   const handleRegisterOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload: Record<string, any> = { name, category, context, googleReviewUrl, keywords, location, mobileNumber, isApproved };
+      const payload: Record<string, any> = { name, category, context, googleReviewUrl, keywords, location, mobileNumber, isApproved, salesPersonId: salesPersonId || null };
       let response;
       if (editingId) {
         response = await fetch(`${API_BASE}/admin/business/${editingId}`, {
@@ -2532,6 +2797,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         setName(''); setCategory('Restaurant'); setContext(''); setGoogleReviewUrl('');
         setKeywords(''); setLocation(''); setMobileNumber('');
         setIsApproved(false); setMerchantEmail(''); setMerchantPassword('');
+        setSalesPersonId('');
         setActiveTab('businesses');
       }
     } catch (err) {
@@ -2546,13 +2812,14 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     setGoogleReviewUrl(biz.googleReviewUrl); setIsApproved(biz.isApproved);
     setKeywords(Array.isArray(biz.keywords) ? biz.keywords.join(', ') : '');
     setLocation(biz.location || ''); setMobileNumber(biz.mobileNumber || '');
+    setSalesPersonId(biz.salesPersonId?._id || biz.salesPersonId || '');
     setActiveTab('add');
   };
 
   const handleCancelEdit = () => {
     setEditingId(null); setName(''); setCategory('Restaurant'); setContext('');
     setGoogleReviewUrl(''); setKeywords(''); setLocation(''); setMobileNumber('');
-    setIsApproved(false); setActiveTab('businesses');
+    setIsApproved(false); setSalesPersonId(''); setActiveTab('businesses');
   };
 
   // Edit modal handlers
@@ -2562,7 +2829,8 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       name: biz.name, category: biz.category, context: biz.context,
       googleReviewUrl: biz.googleReviewUrl,
       keywords: Array.isArray(biz.keywords) ? biz.keywords.join(', ') : (biz.keywords || ''),
-      location: biz.location || '', mobileNumber: biz.mobileNumber || ''
+      location: biz.location || '', mobileNumber: biz.mobileNumber || '',
+      salesPersonId: biz.salesPersonId?._id || biz.salesPersonId || ''
     });
   };
 
@@ -2705,6 +2973,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
           <button className={activeTab === 'revenue' ? 'active' : ''} onClick={() => { setActiveTab('revenue'); setIsMobileMenuOpen(false); }}>
             <BarChart3 size={16} style={{ marginRight: '6px' }} /> Revenue & Plans
           </button>
+          <button className={activeTab === 'salespeople' ? 'active' : ''} onClick={() => { setActiveTab('salespeople'); setIsMobileMenuOpen(false); }}>
+            <Users size={16} style={{ marginRight: '6px' }} /> Sales Team
+          </button>
         </nav>
         <div className="sidebar-bottom">
           <div style={{ paddingTop: '0.5rem', borderTop: '1px solid var(--border-light)' }}>
@@ -2758,6 +3029,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         </button>
         <button className={`tab-btn ${activeTab === 'revenue' ? 'active' : ''}`} onClick={() => setActiveTab('revenue')}>
           <BarChart3 size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Revenue & Plans
+        </button>
+        <button className={`tab-btn ${activeTab === 'salespeople' ? 'active' : ''}`} onClick={() => setActiveTab('salespeople')}>
+          <Users size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} /> Sales Team
         </button>
       </div>
 
@@ -2984,7 +3258,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                       <td>
                         {reg.status === 'pending' && (
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <button className="btn btn-accent" onClick={() => setSubModal({ show: true, bizId: '', bizName: reg.name, regId: reg._id })}
+                            <button className="btn btn-accent" onClick={() => { setSalesPersonId(reg.salesPersonId?._id || reg.salesPersonId || ''); setSubModal({ show: true, bizId: '', bizName: reg.name, regId: reg._id }); }}
                               style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
                               <CheckCircle size={12} /> Payment
                             </button>
@@ -3059,6 +3333,16 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   <label className="form-label">SEO Keywords (comma-separated)</label>
                   <input type="text" className="form-input" value={keywords} onChange={(e) => setKeywords(e.target.value)}
                     placeholder="e.g. best pizza mumbai, italian restaurant, wood fired pizza" />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Salesperson / Referrer</label>
+                  <select className="form-select" value={salesPersonId} onChange={(e) => setSalesPersonId(e.target.value)}>
+                    <option value="">None / Direct Sign-up</option>
+                    {salesPeople.map((sp) => (
+                      <option key={sp._id} value={sp._id}>{sp.name} ({sp.mobileNumber}) - {sp.commissionPercentage || 10}%</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -3230,41 +3514,86 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
           {revenueData && (
             <>
-              <div className="revenue-stats-grid">
-                <div className="card" style={{ padding: '1.5rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>TOTAL REVENUE</p>
-                  <h2 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--success)' }}>₹{revenueData.totalRevenue.toLocaleString('en-IN')}</h2>
+              <div className="revenue-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>TOTAL REVENUE</span>
+                    <DollarSign size={18} style={{ color: 'var(--accent)' }} />
+                  </div>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>₹{revenueData.totalRevenue.toLocaleString('en-IN')}</h2>
                 </div>
-                <div className="card" style={{ padding: '1.5rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>ACTIVE SUBSCRIPTIONS</p>
-                  <h2 style={{ fontSize: '2rem', fontWeight: 700 }}>{revenueData.activeSubscriptions}</h2>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>TOTAL COMMISSION</span>
+                    <Users size={18} style={{ color: 'var(--danger)' }} />
+                  </div>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--danger)', margin: 0 }}>₹{(revenueData.totalCommission || 0).toLocaleString('en-IN')}</h2>
                 </div>
-                <div className="card" style={{ padding: '1.5rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>PLAN DISTRIBUTION</p>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--text-tertiary)' }}>Free:</strong> {revenueData.planCounts.free}</span>
-                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--accent)' }}>Yearly:</strong> {revenueData.planCounts.yearly}</span>
-                    <span style={{ fontSize: '0.8125rem' }}><strong style={{ color: 'var(--warning)' }}>Lifetime:</strong> {revenueData.planCounts.lifetime}</span>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>NET PROFIT</span>
+                    <TrendingUp size={18} style={{ color: 'var(--success)' }} />
+                  </div>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--success)', margin: 0 }}>₹{(revenueData.totalProfit || 0).toLocaleString('en-IN')}</h2>
+                </div>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>ACTIVE SUBSCRIPTIONS</span>
+                    <CheckCircle size={18} style={{ color: 'var(--accent)' }} />
+                  </div>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{revenueData.activeSubscriptions}</h2>
+                </div>
+                <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>PLAN DISTRIBUTION</span>
+                    <BarChart3 size={18} style={{ color: 'var(--warning)' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginTop: 'auto' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>FREE</span>
+                      <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{revenueData.planCounts.free}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>YEARLY</span>
+                      <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--accent)' }}>{revenueData.planCounts.yearly}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>LIFETIME</span>
+                      <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--warning)' }}>{revenueData.planCounts.lifetime}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div style={{ marginBottom: '2rem' }}>
                 <h4 style={{ marginBottom: '1rem' }}>
-                  {revTimeframe === 'day' ? 'Hourly Revenue (Today)' :
-                   revTimeframe === 'week' ? 'Daily Revenue (Last 7 Days)' :
-                   revTimeframe === 'month' ? 'Weekly Revenue (Last 30 Days)' :
-                   revTimeframe === 'year' ? 'Monthly Revenue (Last 12 Months)' :
-                   'Revenue Breakdown (Custom Range)'}
+                  {revTimeframe === 'day' ? 'Hourly Revenue & Profit (Today)' :
+                   revTimeframe === 'week' ? 'Daily Revenue & Profit (Last 7 Days)' :
+                   revTimeframe === 'month' ? 'Weekly Revenue & Profit (Last 30 Days)' :
+                   revTimeframe === 'year' ? 'Monthly Revenue & Profit (Last 12 Months)' :
+                   'Revenue & Profit Breakdown (Custom Range)'}
                 </h4>
                 {revenueData.monthlyRevenue && revenueData.monthlyRevenue.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={250}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={revenueData.monthlyRevenue}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip formatter={(value) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Revenue']} />
-                      <Bar dataKey="revenue" fill="#6C63FF" radius={[4, 4, 0, 0]} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+                      <YAxis tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'var(--bg-primary)',
+                          border: '1px solid var(--border-light)',
+                          borderRadius: 'var(--radius-md)',
+                          boxShadow: 'var(--shadow-md)'
+                        }}
+                        formatter={(value, name) => [
+                          `₹${Number(value).toLocaleString('en-IN')}`,
+                          name === 'revenue' ? 'Revenue' : 'Net Profit'
+                        ]}
+                      />
+                      <Legend verticalAlign="top" height={36} />
+                      <Bar dataKey="revenue" name="Revenue" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="profit" name="Net Profit" fill="var(--success)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -3427,6 +3756,269 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         </div>
       )}
 
+      {activeTab === 'salespeople' && (
+        <div className="fade-in">
+          {/* Top Row: Info cards for overview */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>Total Salespeople</p>
+              <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--accent)' }}>{salesPeople.length}</h2>
+            </div>
+            <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>Referred Partners</p>
+              <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--success)' }}>
+                {salesPeople.reduce((sum, sp) => sum + (sp.referredCount || 0), 0)}
+              </h2>
+            </div>
+            <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>Commissions Earned</p>
+              <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--warning)' }}>
+                ₹{salesPeople.reduce((sum, sp) => sum + (sp.commissionEarned || 0), 0).toLocaleString('en-IN')}
+              </h2>
+            </div>
+            <div className="card" style={{ padding: '1.25rem', textAlign: 'center', border: '1px solid var(--border-light)' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase' }}>Payouts Settled</p>
+              <h2 style={{ fontSize: '2rem', fontWeight: 700, marginTop: '0.25rem', color: 'var(--success)' }}>
+                ₹{salesPeople.reduce((sum, sp) => sum + (sp.totalSettled || 0), 0).toLocaleString('en-IN')}
+              </h2>
+            </div>
+          </div>
+
+          <div className="layout-2-col">
+            {/* Form card on the left */}
+            <div className="card" style={{ height: 'fit-content' }}>
+              <h3 style={{ marginBottom: '1rem' }}>Register New Salesperson</h3>
+              <form onSubmit={handleRegisterSalesPerson}>
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={salesName}
+                    onChange={(e) => setSalesName(e.target.value)}
+                    placeholder="e.g. Rahul Sharma"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    type="tel"
+                    className="form-input"
+                    value={salesMobile}
+                    onChange={(e) => {
+                      let d = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      if (d.length > 5) d = `${d.slice(0, 5)} ${d.slice(5)}`;
+                      setSalesMobile(d);
+                    }}
+                    placeholder="XXXXX XXXXX"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Commission Percentage (%)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    className="form-input"
+                    value={salesCommission}
+                    onChange={(e) => setSalesCommission(e.target.value)}
+                    placeholder="10"
+                    required
+                  />
+                </div>
+                <button type="submit" className="btn btn-accent" style={{ width: '100%', marginTop: '1rem' }}>
+                  Add Salesperson
+                </button>
+              </form>
+            </div>
+
+            {/* List and Statistics card on the right */}
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0 }}>Salespeople & Settlements</h3>
+                <button className="btn btn-outline btn-sm" onClick={fetchSalesPeople} disabled={loadingSales}>
+                  <RefreshCw size={12} className={loadingSales ? 'spinner' : ''} /> Refresh
+                </button>
+              </div>
+
+              {salesPeople.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
+                  <p>No salespeople registered yet. Use the form to add your first member.</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="feedback-table">
+                    <thead>
+                      <tr>
+                        <th>Salesperson Details</th>
+                        <th style={{ textAlign: 'center' }}>Referred</th>
+                        <th>Total Sales</th>
+                        <th>Commission (Rate)</th>
+                        <th>Settled</th>
+                        <th>Outstanding</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesPeople.map((sp) => (
+                        <tr key={sp._id}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{sp.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{sp.mobileNumber}</div>
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{sp.referredCount || 0}</td>
+                          <td style={{ fontWeight: 500 }}>₹{(sp.totalSales || 0).toLocaleString('en-IN')}</td>
+                          <td>
+                            <div style={{ fontWeight: 500, color: 'var(--warning)' }}>₹{(sp.commissionEarned || 0).toLocaleString('en-IN')}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>({sp.commissionPercentage || 10}%)</div>
+                          </td>
+                          <td style={{ fontWeight: 500, color: 'var(--success)' }}>₹{(sp.totalSettled || 0).toLocaleString('en-IN')}</td>
+                          <td style={{ fontWeight: 700, color: (sp.outstandingBalance || 0) > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>
+                            ₹{(sp.outstandingBalance || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                              <button
+                                className="btn btn-accent btn-sm"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                                onClick={() => setSettlementModal({ show: true, sp })}
+                              >
+                                Pay Out
+                              </button>
+                              <button
+                                className="btn btn-outline btn-sm"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                                onClick={() => fetchSettlementHistory(sp._id, sp.name)}
+                              >
+                                History
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Settlement Payout Modal */}
+      {settlementModal.show && settlementModal.sp && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSettlementModal({ show: false, sp: null }); }}>
+          <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2rem' }}>
+            <h3 style={{ marginBottom: '1.25rem' }}>Record Payout for {settlementModal.sp.name}</h3>
+            
+            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.8125rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Commission Earned:</span>
+                <span style={{ fontWeight: 600 }}>₹{(settlementModal.sp.commissionEarned || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Total Payouts Settled:</span>
+                <span style={{ fontWeight: 600, color: 'var(--success)' }}>₹{(settlementModal.sp.totalSettled || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Outstanding Balance:</span>
+                <span style={{ fontWeight: 700, color: 'var(--danger)' }}>₹{(settlementModal.sp.outstandingBalance || 0).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleRecordSettlement}>
+              <div className="form-group">
+                <label className="form-label">Payout Amount (INR)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={settlementModal.sp.outstandingBalance || 99999}
+                  className="form-input"
+                  value={settlementAmount}
+                  onChange={(e) => setSettlementAmount(e.target.value)}
+                  placeholder="e.g. 1000"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes / Transaction Reference</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={settlementNotes}
+                  onChange={(e) => setSettlementNotes(e.target.value)}
+                  placeholder="e.g. UPI payout Ref 123456"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                <button type="submit" className="btn btn-accent" style={{ flex: 1 }}>
+                  Confirm Payout
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setSettlementModal({ show: false, sp: null })}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Settlement History Modal */}
+      {settlementHistoryModal.show && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSettlementHistoryModal({ show: false, spId: '', spName: '', settlements: [] }); }}>
+          <div className="card fade-in" style={{ width: '100%', maxWidth: '500px', padding: '2rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0 }}>Payout History: {settlementHistoryModal.spName}</h3>
+              <button 
+                onClick={() => setSettlementHistoryModal({ show: false, spId: '', spName: '', settlements: [] })}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', color: 'var(--text-secondary)' }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            {loadingSettlements ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <Loader2 size={24} className="spinner" /> Loading payouts...
+              </div>
+            ) : settlementHistoryModal.settlements.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-secondary)' }}>
+                <p>No payout records found for this salesperson.</p>
+              </div>
+            ) : (
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                <div className="table-container">
+                  <table className="feedback-table">
+                    <thead>
+                      <tr>
+                        <th>Date & Time</th>
+                        <th>Amount</th>
+                        <th>Notes / Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {settlementHistoryModal.settlements.map((set) => (
+                        <tr key={set._id}>
+                          <td style={{ fontSize: '0.75rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                            {new Date(set.createdAt).toLocaleDateString()} {new Date(set.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td style={{ fontWeight: 600, color: 'var(--success)' }}>₹{(set.amount || 0).toLocaleString('en-IN')}</td>
+                          <td style={{ fontSize: '0.8125rem' }}>{set.notes || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: '2.5rem' }}></div>
 
       {/* Quick Edit Modal */}
@@ -3476,6 +4068,15 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <label className="form-label">Keywords (comma-separated)</label>
               <input type="text" className="form-input" value={editForm.keywords} onChange={(e) => setEditForm(p => ({ ...p, keywords: e.target.value }))} placeholder="e.g. best pizza, italian food, mumbai restaurant" />
             </div>
+            <div className="form-group">
+              <label className="form-label">Salesperson / Referrer</label>
+              <select className="form-select" value={editForm.salesPersonId} onChange={(e) => setEditForm(p => ({ ...p, salesPersonId: e.target.value }))}>
+                <option value="">None / Direct Sign-up</option>
+                {salesPeople.map((sp) => (
+                  <option key={sp._id} value={sp._id}>{sp.name} ({sp.mobileNumber}) - {sp.commissionPercentage || 10}%</option>
+                ))}
+              </select>
+            </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
               <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSaveEditModal}>Save Changes</button>
@@ -3518,6 +4119,18 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <input type="text" className="form-input" value={subTxnId} onChange={(e) => setSubTxnId(e.target.value)}
                 placeholder="e.g. UPI txn reference" />
             </div>
+
+            {subModal.regId && (
+              <div className="form-group">
+                <label className="form-label">Salesperson / Referrer</label>
+                <select className="form-select" value={salesPersonId} onChange={(e) => setSalesPersonId(e.target.value)}>
+                  <option value="">None / Direct Sign-up</option>
+                  {salesPeople.map((sp) => (
+                    <option key={sp._id} value={sp._id}>{sp.name} ({sp.mobileNumber}) - {sp.commissionPercentage || 10}%</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
               <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubscribe}>

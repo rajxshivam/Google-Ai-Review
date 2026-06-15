@@ -10,6 +10,7 @@ export interface IRegistration extends Document {
   email: string;
   password: string;
   status: 'pending' | 'approved' | 'rejected';
+  salesPersonId?: Schema.Types.ObjectId | null;
   createdAt: Date;
 }
 
@@ -23,6 +24,7 @@ const RegistrationSchema = new Schema<IRegistration>({
   email: { type: String, required: true, unique: true, trim: true, lowercase: true },
   password: { type: String, required: true },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  salesPersonId: { type: Schema.Types.ObjectId, ref: 'SalesPerson', default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

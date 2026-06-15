@@ -11,6 +11,8 @@ import { User } from './models/User';
 import { Registration } from './models/Registration';
 import { Subscription } from './models/Subscription';
 import { StockReview } from './models/StockReview';
+import { SalesPerson } from './models/SalesPerson';
+import { Settlement } from './models/Settlement';
 import { authMiddleware, requireRole, generateToken, AuthRequest } from './middleware/auth';
 
 dotenv.config();
@@ -212,7 +214,7 @@ app.delete('/api/admin/users/:id', authMiddleware, requireRole('admin'), async (
 
 app.post('/api/auth/register-merchant', async (req: Request, res: Response) => {
   try {
-    const { name, category, context, googleReviewUrl, location, mobileNumber, email, password } = req.body;
+    const { name, category, context, googleReviewUrl, location, mobileNumber, email, password, salesPersonId } = req.body;
     if (!name || !category || !email || !password) {
       return res.status(400).json({ error: 'Business name, category, email, and password are required.' });
     }
@@ -223,7 +225,8 @@ app.post('/api/auth/register-merchant', async (req: Request, res: Response) => {
     }
     const registration = await Registration.create({
       name, category, context: context || '', googleReviewUrl: googleReviewUrl || '',
-      location: location || '', mobileNumber: mobileNumber || '', email, password
+      location: location || '', mobileNumber: mobileNumber || '', email, password,
+      salesPersonId: salesPersonId || null
     });
     return res.status(201).json({ message: 'Registration submitted. Waiting for admin approval.', _id: registration._id });
   } catch (error) {
@@ -234,7 +237,7 @@ app.post('/api/auth/register-merchant', async (req: Request, res: Response) => {
 
 app.get('/api/admin/registrations', authMiddleware, requireRole('admin'), async (_req: AuthRequest, res: Response) => {
   try {
-    const registrations = await Registration.find().sort({ createdAt: -1 });
+    const registrations = await Registration.find().sort({ createdAt: -1 }).populate('salesPersonId');
     return res.status(200).json(registrations);
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
@@ -244,7 +247,7 @@ app.get('/api/admin/registrations', authMiddleware, requireRole('admin'), async 
 app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { plan, paymentMethod, transactionId } = req.body;
+    const { plan, paymentMethod, transactionId, salesPersonId } = req.body;
 
     if (!plan || !['yearly', 'lifetime'].includes(plan)) {
       return res.status(400).json({ error: 'Plan is required and must be yearly or lifetime.' });
@@ -256,6 +259,7 @@ app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('adm
     const reg = await Registration.findById(id);
     if (!reg) return res.status(404).json({ error: 'Registration not found.' });
 
+    const finalSalesPersonId = salesPersonId !== undefined ? (salesPersonId || null) : reg.salesPersonId;
     const amount = PLAN_PRICES[plan] || 0;
     const now = new Date();
     const endDate = plan === 'yearly' ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()) : null;
@@ -265,7 +269,8 @@ app.put('/api/admin/registrations/:id/approve', authMiddleware, requireRole('adm
       name: reg.name, category: reg.category, context: reg.context,
       googleReviewUrl: reg.googleReviewUrl, location: reg.location,
       mobileNumber: reg.mobileNumber, isApproved: true, isActive: true,
-      plan, planStartDate: now, planExpiry: endDate
+      plan, planStartDate: now, planExpiry: endDate,
+      salesPersonId: finalSalesPersonId
     });
 
     // Create merchant user
@@ -954,7 +959,7 @@ Return the suggestions formatted strictly as a single JSON array of strings, lik
 // 1. Get all businesses
 app.get('/api/admin/businesses', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    const businesses = await Business.find().sort({ createdAt: -1 });
+    const businesses = await Business.find().sort({ createdAt: -1 }).populate('salesPersonId');
     return res.status(200).json(businesses);
   } catch (error) {
     console.error('Error in GET /api/admin/businesses:', error);
@@ -965,7 +970,7 @@ app.get('/api/admin/businesses', authMiddleware, requireRole('admin'), async (re
 // 2. Create a business (with optional isApproved status) + merchant account
 app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
-    const { name, category, context, googleReviewUrl, keywords, isApproved, email, password, location, mobileNumber, logoUrl } = req.body;
+    const { name, category, context, googleReviewUrl, keywords, isApproved, email, password, location, mobileNumber, logoUrl, salesPersonId } = req.body;
 
     if (!name || !category || !context || !googleReviewUrl) {
       return res.status(400).json({ error: 'All fields are required.' });
@@ -986,7 +991,8 @@ app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req
       location: location || '',
       mobileNumber: mobileNumber || '',
       isApproved: isApproved === undefined ? false : isApproved,
-      logoUrl: logoUrl || ''
+      logoUrl: logoUrl || '',
+      salesPersonId: salesPersonId || null
     });
 
     await business.save();
@@ -1015,7 +1021,7 @@ app.post('/api/admin/business', authMiddleware, requireRole('admin'), async (req
 app.put('/api/admin/business/:id', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, category, context, googleReviewUrl, keywords, isApproved, location, mobileNumber, logoUrl } = req.body;
+    const { name, category, context, googleReviewUrl, keywords, isApproved, location, mobileNumber, logoUrl, salesPersonId } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'Invalid Business ID format.' });
@@ -1032,12 +1038,13 @@ app.put('/api/admin/business/:id', authMiddleware, requireRole('admin'), async (
     if (mobileNumber !== undefined) updateData.mobileNumber = mobileNumber;
     if (keywordsArray !== undefined) updateData.keywords = keywordsArray;
     if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
+    if (salesPersonId !== undefined) updateData.salesPersonId = salesPersonId || null;
 
     const business = await Business.findByIdAndUpdate(
       id,
       updateData,
       { new: true, runValidators: true }
-    );
+    ).populate('salesPersonId');
 
     if (!business) {
       return res.status(404).json({ error: 'Business not found.' });
@@ -1355,12 +1362,28 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (req: 
 
     const subs = await Subscription.find({
       startDate: { $gte: filterStart, $lte: filterEnd }
-    }).populate('businessId', 'name plan planStartDate planExpiry isActive');
+    }).populate({
+      path: 'businessId',
+      select: 'name plan planStartDate planExpiry isActive salesPersonId',
+      populate: {
+        path: 'salesPersonId',
+        select: 'commissionPercentage'
+      }
+    });
+
+    const getSubCommission = (s: any) => {
+      const business = s.businessId;
+      const salesperson = business?.salesPersonId;
+      const commissionRate = salesperson ? (salesperson.commissionPercentage !== undefined ? salesperson.commissionPercentage : 10) / 100 : 0;
+      return s.amount * commissionRate;
+    };
 
     const totalRevenue = subs.reduce((sum, s) => sum + s.amount, 0);
+    const totalCommission = subs.reduce((sum, s) => sum + getSubCommission(s), 0);
+    const totalProfit = totalRevenue - totalCommission;
 
     const diffDays = Math.ceil((filterEnd.getTime() - filterStart.getTime()) / (1000 * 60 * 60 * 24));
-    const monthlyRevenue: { month: string; revenue: number }[] = [];
+    const monthlyRevenue: { month: string; revenue: number; profit: number }[] = [];
 
     if (timeframe === 'day' || diffDays <= 2) {
       const intervals = [
@@ -1372,11 +1395,13 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (req: 
         { label: '8pm-12am', startHour: 20, endHour: 24 }
       ];
       intervals.forEach(interval => {
-        const total = subs.filter(s => {
+        const intervalSubs = subs.filter(s => {
           const hour = new Date(s.startDate).getHours();
           return hour >= interval.startHour && hour < interval.endHour;
-        }).reduce((sum, s) => sum + s.amount, 0);
-        monthlyRevenue.push({ month: interval.label, revenue: total });
+        });
+        const rev = intervalSubs.reduce((sum, s) => sum + s.amount, 0);
+        const comm = intervalSubs.reduce((sum, s) => sum + getSubCommission(s), 0);
+        monthlyRevenue.push({ month: interval.label, revenue: rev, profit: rev - comm });
       });
     } else if (timeframe === 'week' || diffDays <= 15) {
       for (let i = diffDays - 1; i >= 0; i--) {
@@ -1384,20 +1409,20 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (req: 
         const dateStr = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
         const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
         const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-        const total = subs
-          .filter(s => s.startDate >= startOfDay && s.startDate <= endOfDay)
-          .reduce((sum, s) => sum + s.amount, 0);
-        monthlyRevenue.push({ month: dateStr, revenue: total });
+        const intervalSubs = subs.filter(s => s.startDate >= startOfDay && s.startDate <= endOfDay);
+        const rev = intervalSubs.reduce((sum, s) => sum + s.amount, 0);
+        const comm = intervalSubs.reduce((sum, s) => sum + getSubCommission(s), 0);
+        monthlyRevenue.push({ month: dateStr, revenue: rev, profit: rev - comm });
       }
     } else if (timeframe === 'month' || diffDays <= 60) {
       for (let d = new Date(filterStart); d < filterEnd; ) {
         const nextVal = new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
         const endOfWeek = nextVal > filterEnd ? filterEnd : nextVal;
         const label = `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
-        const total = subs
-          .filter(s => s.startDate >= d && s.startDate <= endOfWeek)
-          .reduce((sum, s) => sum + s.amount, 0);
-        monthlyRevenue.push({ month: label, revenue: total });
+        const intervalSubs = subs.filter(s => s.startDate >= d && s.startDate <= endOfWeek);
+        const rev = intervalSubs.reduce((sum, s) => sum + s.amount, 0);
+        const comm = intervalSubs.reduce((sum, s) => sum + getSubCommission(s), 0);
+        monthlyRevenue.push({ month: label, revenue: rev, profit: rev - comm });
         d = nextVal;
       }
     } else {
@@ -1405,10 +1430,10 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (req: 
         const nextVal = new Date(d.getFullYear(), d.getMonth() + 1, 1);
         const endOfMonth = nextVal > filterEnd ? filterEnd : new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
         const label = d.toLocaleString('en-IN', { month: 'short', year: '2-digit' });
-        const total = subs
-          .filter(s => s.startDate >= d && s.startDate <= endOfMonth)
-          .reduce((sum, s) => sum + s.amount, 0);
-        monthlyRevenue.push({ month: label, revenue: total });
+        const intervalSubs = subs.filter(s => s.startDate >= d && s.startDate <= endOfMonth);
+        const rev = intervalSubs.reduce((sum, s) => sum + s.amount, 0);
+        const comm = intervalSubs.reduce((sum, s) => sum + getSubCommission(s), 0);
+        monthlyRevenue.push({ month: label, revenue: rev, profit: rev - comm });
         d = nextVal;
       }
     }
@@ -1428,6 +1453,8 @@ app.get('/api/admin/revenue', authMiddleware, requireRole('admin'), async (req: 
 
     return res.status(200).json({
       totalRevenue,
+      totalCommission,
+      totalProfit,
       activeSubscriptions: subs.filter(s => s.status === 'active').length,
       planCounts,
       monthlyRevenue,
@@ -1924,6 +1951,139 @@ app.post('/api/webhooks/google-pubsub', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error in Pub/Sub Webhook:', error);
     return res.status(500).send('Internal Server Error');
+  }
+});
+
+// ==========================================
+// SALESPERSON & SETTLEMENT ENDPOINTS
+// ==========================================
+
+// Register a new salesperson
+app.post('/api/admin/salespeople', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { name, mobileNumber, commissionPercentage } = req.body;
+    if (!name || !mobileNumber) {
+      return res.status(400).json({ error: 'Name and mobile number are required.' });
+    }
+    const salesPerson = new SalesPerson({
+      name,
+      mobileNumber,
+      commissionPercentage: commissionPercentage !== undefined ? Number(commissionPercentage) : 10
+    });
+    await salesPerson.save();
+    return res.status(201).json(salesPerson);
+  } catch (error) {
+    console.error('Error in POST /api/admin/salespeople:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get all salespeople with calculated metrics
+app.get('/api/admin/salespeople', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const salespeople = await SalesPerson.find().sort({ createdAt: -1 }).lean();
+    
+    const populatedSalespeople = await Promise.all(salespeople.map(async (sp) => {
+      // Find all businesses referred by this salesperson
+      const referredBusinesses = await Business.find({ salesPersonId: sp._id }).lean();
+      const referredBizIds = referredBusinesses.map(b => b._id);
+      
+      // Find all subscriptions for these businesses
+      const subscriptions = await Subscription.find({ 
+        businessId: { $in: referredBizIds },
+        status: { $ne: 'revoked' }
+      }).lean();
+      
+      // Calculate total sales amount
+      const totalSales = subscriptions.reduce((sum, sub) => sum + (sub.amount || 0), 0);
+      
+      // Calculate commission based on salesperson's rate
+      const commissionRate = (sp.commissionPercentage !== undefined ? sp.commissionPercentage : 10) / 100;
+      const commissionEarned = totalSales * commissionRate;
+      
+      // Find all settlements recorded for this salesperson
+      const settlements = await Settlement.find({ salesPersonId: sp._id }).lean();
+      const totalSettled = settlements.reduce((sum, set) => sum + (set.amount || 0), 0);
+      
+      // Outstanding balance
+      const outstandingBalance = commissionEarned - totalSettled;
+      
+      return {
+        ...sp,
+        referredCount: referredBusinesses.length,
+        totalSales,
+        commissionEarned,
+        totalSettled,
+        outstandingBalance,
+        businesses: referredBusinesses.map(b => ({ _id: b._id, name: b.name, plan: b.plan, location: b.location }))
+      };
+    }));
+    
+    return res.status(200).json(populatedSalespeople);
+  } catch (error) {
+    console.error('Error in GET /api/admin/salespeople:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Record a payout (settlement) for a salesperson
+app.post('/api/admin/salespeople/:id/settlements', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { amount, notes } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid Salesperson ID.' });
+    }
+    
+    const salesPerson = await SalesPerson.findById(id);
+    if (!salesPerson) {
+      return res.status(404).json({ error: 'Salesperson not found.' });
+    }
+    
+    if (amount === undefined || amount === null || Number(amount) < 0) {
+      return res.status(400).json({ error: 'Amount is required and must be non-negative.' });
+    }
+    
+    const settlement = new Settlement({
+      salesPersonId: id,
+      amount: Number(amount),
+      notes: notes || ''
+    });
+    
+    await settlement.save();
+    return res.status(201).json(settlement);
+  } catch (error) {
+    console.error('Error in POST /api/admin/salespeople/:id/settlements:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get settlement history for a salesperson
+app.get('/api/admin/salespeople/:id/settlements', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid Salesperson ID.' });
+    }
+    
+    const settlements = await Settlement.find({ salesPersonId: id }).sort({ createdAt: -1 });
+    return res.status(200).json(settlements);
+  } catch (error) {
+    console.error('Error in GET /api/admin/salespeople/:id/settlements:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Get salespeople list (Public - only name and _id)
+app.get('/api/public/salespeople', async (_req: Request, res: Response) => {
+  try {
+    const salespeople = await SalesPerson.find({}, '_id name').sort({ name: 1 });
+    return res.status(200).json(salespeople);
+  } catch (error) {
+    console.error('Error in GET /api/public/salespeople:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
