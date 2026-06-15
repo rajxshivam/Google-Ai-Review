@@ -7,6 +7,8 @@ export interface IUser extends Document {
   role: 'admin' | 'merchant';
   businessId?: Schema.Types.ObjectId;
   createdAt: Date;
+  passwordResetOtp?: string;
+  passwordResetExpiry?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -15,7 +17,9 @@ const UserSchema = new Schema<IUser>({
   password: { type: String, required: true, select: false },
   role: { type: String, enum: ['admin', 'merchant'], required: true },
   businessId: { type: Schema.Types.ObjectId, ref: 'Business', default: null },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  passwordResetOtp: { type: String, select: false },
+  passwordResetExpiry: { type: Date, select: false }
 });
 
 UserSchema.pre('save', async function (next) {
