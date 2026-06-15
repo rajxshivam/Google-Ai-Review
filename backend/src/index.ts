@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Business } from './models/Business';
 import { Feedback } from './models/Feedback';
@@ -13,7 +15,7 @@ import { Subscription } from './models/Subscription';
 import { StockReview } from './models/StockReview';
 import { SalesPerson } from './models/SalesPerson';
 import { Settlement } from './models/Settlement';
-import { authMiddleware, requireRole, generateToken, AuthRequest } from './middleware/auth';
+import { authMiddleware, requireRole, generateToken, AuthRequest, JWT_SECRET } from './middleware/auth';
 
 dotenv.config();
 
@@ -179,6 +181,103 @@ app.get('/api/auth/me', authMiddleware, async (req: AuthRequest, res: Response) 
     const user = req.user!;
     return res.status(200).json({ _id: user._id, email: user.email, role: user.role, businessId: user.businessId });
   } catch (error) {
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
+
+app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return res.status(200).json({ message: 'If an account exists with this email, an OTP has been sent.' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    user.passwordResetOtp = hashedOtp;
+    user.passwordResetExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    if (N8N_WEBHOOK_URL) {
+      try {
+        await fetch(N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email, otp, name: user.email.split('@')[0] })
+        });
+      } catch (err) {
+        console.error('n8n webhook error:', err);
+      }
+    }
+
+    return res.status(200).json({ message: 'If an account exists with this email, an OTP has been sent.' });
+  } catch (error) {
+    console.error('Error in POST /api/auth/forgot-password:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+passwordResetOtp +passwordResetExpiry');
+    if (!user || !user.passwordResetOtp || !user.passwordResetExpiry) {
+      return res.status(400).json({ error: 'Invalid or expired OTP.' });
+    }
+
+    if (user.passwordResetExpiry < new Date()) {
+      return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
+    }
+
+    const isValid = await bcrypt.compare(otp, user.passwordResetOtp);
+    if (!isValid) return res.status(400).json({ error: 'Invalid OTP.' });
+
+    const resetToken = jwt.sign({ userId: user._id, purpose: 'password-reset' }, JWT_SECRET, { expiresIn: '15m' });
+
+    user.passwordResetOtp = undefined;
+    user.passwordResetExpiry = undefined;
+    await user.save();
+
+    return res.status(200).json({ resetToken, message: 'OTP verified successfully.' });
+  } catch (error) {
+    console.error('Error in POST /api/auth/verify-otp:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken || !newPassword) return res.status(400).json({ error: 'Reset token and new password are required.' });
+
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(resetToken, JWT_SECRET);
+    } catch {
+      return res.status(400).json({ error: 'Invalid or expired reset token.' });
+    }
+
+    if (decoded.purpose !== 'password-reset') {
+      return res.status(400).json({ error: 'Invalid reset token.' });
+    }
+
+    const user = await User.findById(decoded.userId).select('+password');
+    if (!user) return res.status(400).json({ error: 'User not found.' });
+
+    user.password = newPassword;
+    await user.save();
+
+    return res.status(200).json({ message: 'Password reset successfully. You can now log in.' });
+  } catch (error) {
+    console.error('Error in POST /api/auth/reset-password:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -361,8 +460,15 @@ function getFallbackReviews(name: string, category: string, context: string, rat
       `${name} मुझे बहुत पसंद आया! शहर का सबसे बेहतरीन ${category}। सेवा शानदार थी और अनुभव कुल मिलाकर बहुत बढ़िया था। ज़रूर आएं!`,
       `${name} में बहुत अच्छा अनुभव रहा। ग्राहकों के प्रति इनका ध्यान और व्यवहार कमाल का है। मैं जल्द ही दोबारा आऊंगा।`,
       `इस ${category} से बहुत खुश हूँ। वे मिलनसार, पेशेवर थे और बिल्कुल वैसा ही मिला जैसी मुझे उम्मीद थी। 5 स्टार!`,
-      `शानدار गुणवत्ता और बेहद मिलनसार स्टाफ। आप बता सकते हैं कि उन्हें ग्राहक की संतुष्टि की परवाह है। ${name} की अत्यधिक सिफारिश करता हूँ!`,
+      `शानदार गुणवत्ता और बेहद मिलनसार स्टाफ। आप बता सकते हैं कि उन्हें ग्राहक की संतुष्टि की परवाह है। ${name} की अत्यधिक सिफारिश करता हूँ!`,
       `एक अद्भुत अनुभव! त्वरित सेवा, उच्च गुणवत्ता और बहुत ही स्वागत योग्य वातावरण। यहाँ जाना वाकई सार्थक है।`
+    ],
+    'Gujarati': [
+      `${name} મને ખૂબ જ પસંદ આવ્યું! શહેરનો સૌથી સરવોत्तમ ${category}। સેવા શાનદાર હતી અને અનુભવ કુલ મિલાકર ખૂબ સારું હતું। ખરાબ પસંદગી નથી!`,
+      `${name} ખૂબ સારું અનુભવ રહ્યું। ગ્રાહકો પ્રત્યે નelligent ધ્યાન અને વર્તન કમાલનો છે। હું જલ્દી પાછા આવીશ।`,
+      `આ ${category} થી ખૂબ ખુશ છું। ते મૈત્રીભર્ય અને પેશેવર હતા અને મારી ઉમીદ પ્રમાણે સબ કંઈ મળ્યું। 5 સ્ટાર!`,
+      `ઉત્તમ ગુણવત્તા અને ખૂબ મૈત્રીભર્ય સ્ટાફ। તમે જાણી શકો છો કે તેમને ગ્રાહકની સંતોષની ચિંતા છે। ${name} ની સیفારિશ કરું છું!`,
+      `એક અદ્ભુત અનુભવ! ઝડપી સેવા, ઉચ્ચ ગુણવત્તા અને ખૂબ સ્વાગત યોગ્ય વાતાવરણ. અહીં જાણા વાસ્તવિક રીતે સાર્થક છે.`
     ]
   } : {
     'English': [
@@ -399,6 +505,13 @@ function getFallbackReviews(name: string, category: string, context: string, rat
       `ठीक-ठाक ${category} सेवा, लेकिन मेरी उम्मीदों के अनुरूप नहीं। स्टाफ विनम्र था लेकिन प्रतीक्षा समय बहुत लंबा था।`,
       `ठीक गुणवत्ता, हालांकि समीक्षाओं के आधार पर मैंने कुछ अधिक की उम्मीद की थी। कुल मिलाकर अनुभव सामान्य रहा।`,
       `${name} की यात्रा ठीक रही, लेकिन गति और ग्राहकों के प्रति ध्यान देने में सुधार की आवश्यकता है।`
+    ],
+    'Gujarati': [
+      `${name} માં સુધારાની ગુંજાઈશ છે, પરંતુ અનુભવ મિશ્રિત રહ્યો। ${category} ની ગુણવત્તા ઠીક હતી, પરંતુ સેવામાં સુધારાની જરૂર છે।`,
+      `${name} માં એક સરાસર અનુભવ। કેટલીક વસ્તુએ સરસ હોય, પરંતુ અન્યમાં કમી મહસૂસ થઈ। આશા છે કે ते સુધરશે।`,
+      `ઠીક-ઠાક ${category} સેવા, પરંતુ મારી ઉમીદો અનુરૂપ નહીં। સ્ટાફ વિનમ્ર હતો પરંતુ પ્રતીક્ષા સમય ખૂબ લાંબો હતો।`,
+      `ઠીક ગુણવત્તા, అయસ્તુ સમીક્ષાઓના આધારે મને થોડું વધારાની ઉમીદ હતી। કુલ મિલાકર અનુભવ સામાન્ય રહ્યો।`,
+      `${name} ની મુસાફરી ઠીક રહી, પરંતુ વેગ અને ગ્રાહકોપ્રત્યે ધ્યાન આપવામાં સુધારાની જરૂર છે.`
     ]
   };
 
@@ -421,13 +534,13 @@ function getFallbackReviews(name: string, category: string, context: string, rat
 }
 
 // Helper to generate bulk reviews in stock using Gemini
-async function generateStockReviews(business: any, rating: number, count: number): Promise<string[]> {
+async function generateStockReviews(business: any, rating: number, count: number, language: string = 'English'): Promise<string[]> {
   const generated: string[] = [];
   
   if (!GEMINI_API_KEY) {
     console.log('Gemini API key missing, generating template reviews for stock.');
     for (let i = 0; i < count; i++) {
-      const templates = getFallbackReviews(business.name, business.category, business.context, rating, 'English');
+      const templates = getFallbackReviews(business.name, business.category, business.context, rating, language);
       const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
       generated.push(`${randomTemplate} (${i + 1})`);
     }
@@ -452,7 +565,7 @@ async function generateStockReviews(business: any, rating: number, count: number
     const currentBatchSize = Math.min(chunkSize, needed);
 
     try {
-      const prompt = `You are an AI generating realistic, diverse, and natural customer reviews in English for a ${business.category} business named "${business.name}".
+      const prompt = `You are an AI generating realistic, diverse, and natural customer reviews in ${language} for a ${business.category} business named "${business.name}".
 Business Context: ${business.context}${keywordsStr}
 Target Rating: ${rating} out of 5 stars.
 Instructions:
@@ -506,7 +619,7 @@ Return the suggestions formatted strictly as a single JSON array of strings, lik
     const startCount = generated.length;
     console.log(`Gemini chunk generation under-delivered. Adding ${count - startCount} template reviews to reach target.`);
     for (let i = startCount; i < count; i++) {
-      const templates = getFallbackReviews(business.name, business.category, business.context, rating, 'English');
+      const templates = getFallbackReviews(business.name, business.category, business.context, rating, language);
       const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
       generated.push(`${randomTemplate} (${i + 1})`);
     }
@@ -549,29 +662,30 @@ ${JSON.stringify(reviews)}`;
   return reviews;
 }
 
-// Background initializer for business review stock
+// Background initializer for business review stock - generates 50 English reviews per rating on approval
 async function initializeBusinessStock(business: any) {
   try {
-    const existingCount = await StockReview.countDocuments({ businessId: business._id });
+    const existingCount = await StockReview.countDocuments({ businessId: business._id, language: 'English' });
     if (existingCount > 0) {
-      console.log(`Business ${business.name} already has ${existingCount} reviews in stock. Skipping auto-generation.`);
+      console.log(`Business ${business.name} already has ${existingCount} English reviews in stock. Skipping auto-generation.`);
       return;
     }
 
-    console.log(`Starting background review stock generation (100 each for 2, 3, 4, 5 stars) for business: ${business.name}`);
+    console.log(`Starting background review stock generation (50 each for 2, 3, 4, 5 stars in English) for business: ${business.name}`);
     // Run generation asynchronously to prevent blocking the calling requests
     (async () => {
       for (const rating of [2, 3, 4, 5]) {
         try {
-          const reviews = await generateStockReviews(business, rating, 100);
+          const reviews = await generateStockReviews(business, rating, 50, 'English');
           const stockDocs = reviews.map(text => ({
             businessId: business._id,
             rating,
             reviewText: text,
-            isUsed: false
+            isUsed: false,
+            language: 'English'
           }));
           await StockReview.insertMany(stockDocs);
-          console.log(`Successfully generated and added 100 stock reviews for rating ${rating} of business: ${business.name}`);
+          console.log(`Successfully generated and added 50 English stock reviews for rating ${rating} of business: ${business.name}`);
         } catch (ratingErr) {
           console.error(`Failed to auto-generate stock reviews for rating ${rating} of business ${business.name}:`, ratingErr);
         }
@@ -584,10 +698,10 @@ async function initializeBusinessStock(business: any) {
 
 const activeReplenishments = new Set<string>();
 
-// Auto-replenish stock when the count for any rating drops below 5
-async function autoReplenishStockIfNeeded(businessId: any, rating: number) {
+// Auto-replenish stock when the count for any rating drops below 5 for a specific language
+async function autoReplenishStockIfNeeded(businessId: any, rating: number, language: string = 'English') {
   if (rating < 2 || rating > 5) return;
-  const lockKey = `${businessId.toString()}_${rating}`;
+  const lockKey = `${businessId.toString()}_${rating}_${language}`;
   if (activeReplenishments.has(lockKey)) {
     return;
   }
@@ -596,12 +710,13 @@ async function autoReplenishStockIfNeeded(businessId: any, rating: number) {
     const count = await StockReview.countDocuments({
       businessId,
       rating,
+      language,
       isUsed: false
     });
 
     if (count < 5) {
       activeReplenishments.add(lockKey);
-      console.log(`[Auto-Replenish] Stock low for business ID: ${businessId} for star: ${rating} (current: ${count}). Replenishing with 50 reviews...`);
+      console.log(`[Auto-Replenish] Stock low for business ID: ${businessId} for star: ${rating} language: ${language} (current: ${count}). Replenishing with 50 reviews...`);
       
       (async () => {
         try {
@@ -610,24 +725,25 @@ async function autoReplenishStockIfNeeded(businessId: any, rating: number) {
             console.error(`[Auto-Replenish] Business not found for ID: ${businessId}`);
             return;
           }
-          const reviews = await generateStockReviews(business, rating, 50);
+          const reviews = await generateStockReviews(business, rating, 50, language);
           const stockDocs = reviews.map(text => ({
             businessId: business._id,
             rating,
             reviewText: text,
-            isUsed: false
+            isUsed: false,
+            language
           }));
           await StockReview.insertMany(stockDocs);
-          console.log(`[Auto-Replenish] Successfully auto-generated 50 reviews for rating ${rating} of business: ${business.name}`);
+          console.log(`[Auto-Replenish] Successfully auto-generated 50 ${language} reviews for rating ${rating} of business: ${business.name}`);
         } catch (err) {
-          console.error(`[Auto-Replenish] Failed to auto-replenish reviews for rating ${rating} of business ${businessId}:`, err);
+          console.error(`[Auto-Replenish] Failed to auto-replenish reviews for rating ${rating} language ${language} of business ${businessId}:`, err);
         } finally {
           activeReplenishments.delete(lockKey);
         }
       })();
     }
   } catch (err) {
-    console.error(`[Auto-Replenish] Error checking review count for business ${businessId} and rating ${rating}:`, err);
+    console.error(`[Auto-Replenish] Error checking review count for business ${businessId} and rating ${rating} language ${language}:`, err);
   }
 }
 
@@ -862,44 +978,60 @@ app.post('/api/business/:id/generate-reviews', async (req: Request, res: Respons
     const targetRating = rating || 5;
     const targetLanguage = language || 'English';
 
-    // 1. Check stock first
-    const stockCount = await StockReview.countDocuments({ businessId: id, rating: targetRating, isUsed: false });
+    // 1. Check stock first for the specific language
+    const stockCount = await StockReview.countDocuments({ businessId: id, rating: targetRating, language: targetLanguage, isUsed: false });
 
     if (stockCount >= 5) {
-      // Pull 5 random unused reviews from stock
+      // Pull 5 random unused reviews from stock for the specific language
       const stockDocs = await StockReview.aggregate([
-        { $match: { businessId: new mongoose.Types.ObjectId(id), rating: targetRating, isUsed: false } },
+        { $match: { businessId: new mongoose.Types.ObjectId(id), rating: targetRating, language: targetLanguage, isUsed: false } },
         { $sample: { size: 5 } }
       ]);
 
-      const originalReviewsText = stockDocs.map(s => s.reviewText);
-
-      // Translate dynamically if target language is not English
-      const translatedReviews = await translateReviews(originalReviewsText, targetLanguage);
-
-      const reviews = stockDocs.map((s, idx) => ({
+      const reviews = stockDocs.map(s => ({
         id: s._id.toString(),
-        text: translatedReviews[idx]
+        text: s.reviewText
       }));
 
       return res.status(200).json({ reviews });
     }
 
-    // 2. Stock is low (< 5), fall back to dynamic generation via Gemini
-    console.log(`Stock reviews low for rating ${targetRating} (current stock: ${stockCount}). Generating dynamically.`);
+    // 2. Stock is low (< 5) for this language, generate 50 and store them, show 5 to user
+    console.log(`Stock reviews low for rating ${targetRating} language ${targetLanguage} (current stock: ${stockCount}). Generating 50 reviews for stock...`);
 
-    // Auto-replenish stock asynchronously in the background so future requests have stock
+    // Generate 50 reviews for this language and store them
     if (targetRating >= 2 && targetRating <= 5) {
-      autoReplenishStockIfNeeded(id, targetRating);
+      try {
+        const generatedReviews = await generateStockReviews(business, targetRating, 50, targetLanguage);
+        const stockDocs = generatedReviews.map(text => ({
+          businessId: business._id,
+          rating: targetRating,
+          reviewText: text,
+          isUsed: false,
+          language: targetLanguage
+        }));
+        await StockReview.insertMany(stockDocs);
+        console.log(`Successfully generated and stored 50 ${targetLanguage} reviews for rating ${targetRating} of business: ${business.name}`);
+      } catch (err) {
+        console.error(`Failed to generate stock reviews for rating ${targetRating} language ${targetLanguage}:`, err);
+      }
     }
 
-    if (!GEMINI_API_KEY) {
-      const fallbackReviews = getFallbackReviews(business.name, business.category, business.context, targetRating, targetLanguage);
-      return res.status(200).json({
-        reviews: fallbackReviews.map(text => ({ id: 'dynamic', text }))
-      });
+    // Now pull 5 from the newly generated stock
+    const newStockDocs = await StockReview.aggregate([
+      { $match: { businessId: new mongoose.Types.ObjectId(id), rating: targetRating, language: targetLanguage, isUsed: false } },
+      { $sample: { size: 5 } }
+    ]);
+
+    if (newStockDocs.length > 0) {
+      const reviews = newStockDocs.map(s => ({
+        id: s._id.toString(),
+        text: s.reviewText
+      }));
+      return res.status(200).json({ reviews });
     }
 
+    // Fallback if stock generation failed - generate dynamically via Gemini
     try {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });

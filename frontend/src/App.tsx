@@ -5,6 +5,7 @@ import {
   Check,
   MessageSquare,
   Shield,
+  ShieldOff,
   Settings,
   QrCode,
   Printer,
@@ -22,7 +23,6 @@ import {
   CheckCircle,
   XCircle,
   Edit2,
-  Trash2,
   BarChart3,
   Menu,
   X,
@@ -43,6 +43,9 @@ const GoogleLogoSvg = () => (
   </svg>
 );
 
+const Logo = ({ size = 40 }: { size?: number }) => (
+  <img src="/ROB-SQR.png" alt="Review Our Business" style={{ width: size, height: size, objectFit: 'contain' }} />
+);
 
 interface AuthUser {
   _id: string;
@@ -84,8 +87,8 @@ function LoginPage({ login, showToast, user, navigateTo }: LoginPageProps) {
       <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <Sparkles size={28} color="var(--accent)" />
-            <h1 style={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.025em' }}><span style={{ color: 'var(--accent)' }}>Review Our</span> Business</h1>
+            <Logo size={48} />
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.025em' }}><span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span></h1>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Sign in to your account</p>
         </div>
@@ -118,8 +121,284 @@ function LoginPage({ login, showToast, user, navigateTo }: LoginPageProps) {
             {loading ? <><Loader2 size={16} className="spinner" /> Signing in...</> : 'Sign In'}
           </button>
         </form>
-        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+        <p style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.8125rem' }}>
+          <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/forgot-password')}>Forgot password?</span>
+        </p>
+        <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
           Are you a merchant? <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/register')}>Register here</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// FORGOT PASSWORD PAGE
+// ==========================================
+interface ForgotPasswordPageProps {
+  showToast: (msg: string) => void;
+  navigateTo: (path: string) => void;
+}
+
+function ForgotPasswordPage({ showToast, navigateTo }: ForgotPasswordPageProps) {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      setSent(true);
+      showToast(data.message || 'OTP sent to your email.');
+    } catch {
+      showToast('Could not connect to server.');
+    }
+    setLoading(false);
+  };
+
+  if (sent) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '1rem' }}>
+        <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem', textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+            <Logo size={48} />
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span></h1>
+          </div>
+          <CheckCircle size={48} color="var(--success)" style={{ marginBottom: '1rem' }} />
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>OTP Sent!</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+            If an account exists with <strong>{email}</strong>, a 6-digit OTP has been sent to your email.
+          </p>
+          <button className="btn btn-accent" style={{ width: '100%' }} onClick={() => navigateTo('/verify-otp')}>
+            Enter OTP
+          </button>
+          <p style={{ marginTop: '1rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/login')}>Back to Login</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '1rem' }}>
+      <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <Logo size={48} />
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span></h1>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Enter your email to receive a reset OTP</p>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              className="form-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+            />
+          </div>
+          <button type="submit" className="btn btn-accent" disabled={loading} style={{ width: '100%', marginTop: '0.5rem' }}>
+            {loading ? <><Loader2 size={16} className="spinner" /> Sending OTP...</> : 'Send OTP'}
+          </button>
+        </form>
+        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/login')}>Back to Login</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// VERIFY OTP PAGE
+// ==========================================
+interface VerifyOtpPageProps {
+  showToast: (msg: string) => void;
+  navigateTo: (path: string) => void;
+}
+
+function VerifyOtpPage({ showToast, navigateTo }: VerifyOtpPageProps) {
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp })
+      });
+      const data = await res.json();
+      if (res.ok && data.resetToken) {
+        localStorage.setItem('reset_token', data.resetToken);
+        navigateTo('/reset-password');
+        showToast('OTP verified. Set your new password.');
+      } else {
+        showToast(data.error || 'Invalid OTP.');
+      }
+    } catch {
+      showToast('Could not connect to server.');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '1rem' }}>
+      <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <Logo size={48} />
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span></h1>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Enter the 6-digit OTP sent to your email</p>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              className="form-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">OTP Code</label>
+            <input
+              type="text"
+              className="form-input"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter 6-digit OTP"
+              required
+              maxLength={6}
+              style={{ letterSpacing: '0.5em', textAlign: 'center', fontSize: '1.25rem' }}
+            />
+          </div>
+          <button type="submit" className="btn btn-accent" disabled={loading} style={{ width: '100%', marginTop: '0.5rem' }}>
+            {loading ? <><Loader2 size={16} className="spinner" /> Verifying...</> : 'Verify OTP'}
+          </button>
+        </form>
+        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/forgot-password')}>Resend OTP</span>
+          {' · '}
+          <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/login')}>Back to Login</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// RESET PASSWORD PAGE
+// ==========================================
+interface ResetPasswordPageProps {
+  showToast: (msg: string) => void;
+  navigateTo: (path: string) => void;
+}
+
+function ResetPasswordPage({ showToast, navigateTo }: ResetPasswordPageProps) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      showToast('Passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('Password must be at least 6 characters.');
+      return;
+    }
+    const resetToken = localStorage.getItem('reset_token');
+    if (!resetToken) {
+      showToast('Reset token expired. Please start over.');
+      navigateTo('/forgot-password');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resetToken, newPassword })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.removeItem('reset_token');
+        showToast('Password reset successfully! You can now log in.');
+        navigateTo('/login');
+      } else {
+        showToast(data.error || 'Failed to reset password.');
+      }
+    } catch {
+      showToast('Could not connect to server.');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '1rem' }}>
+      <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2.5rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <Logo size={48} />
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span></h1>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Set your new password</p>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">New Password</label>
+            <input
+              type="password"
+              className="form-input"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password"
+              required
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Confirm Password</label>
+            <input
+              type="password"
+              className="form-input"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              required
+              autoComplete="new-password"
+            />
+          </div>
+          <button type="submit" className="btn btn-accent" disabled={loading} style={{ width: '100%', marginTop: '0.5rem' }}>
+            {loading ? <><Loader2 size={16} className="spinner" /> Resetting...</> : 'Reset Password'}
+          </button>
+        </form>
+        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => navigateTo('/login')}>Back to Login</span>
         </p>
       </div>
     </div>
@@ -217,8 +496,8 @@ function RegisterPage({ showToast, navigateTo }: RegisterPageProps) {
       <div className="card fade-in" style={{ width: '100%', maxWidth: '520px', padding: '2.5rem' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <Sparkles size={28} color="var(--accent)" />
-            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span style={{ color: 'var(--accent)' }}>Review Our</span> Business</h1>
+            <Logo size={48} />
+            <h1 style={{ fontWeight: 700, fontSize: '1.5rem' }}><span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span></h1>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Register your business</p>
         </div>
@@ -316,6 +595,15 @@ const getRouteInfo = () => {
   }
   if (path === '/register') {
     return { view: 'register', businessId: '' };
+  }
+  if (path === '/forgot-password') {
+    return { view: 'forgot-password', businessId: '' };
+  }
+  if (path === '/verify-otp') {
+    return { view: 'verify-otp', businessId: '' };
+  }
+  if (path === '/reset-password') {
+    return { view: 'reset-password', businessId: '' };
   }
   if (path.startsWith('/review/')) {
     const parts = path.split('/');
@@ -420,7 +708,7 @@ export default function App() {
   };
 
   // Auth gate: redirect to login if not authenticated (except review, login, and register pages)
-  if (authLoading && route.view !== 'review' && route.view !== 'login' && route.view !== 'register') {
+  if (authLoading && route.view !== 'review' && route.view !== 'login' && route.view !== 'register' && route.view !== 'forgot-password' && route.view !== 'verify-otp' && route.view !== 'reset-password') {
     return (
       <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Loader2 size={36} className="spinner" color="var(--accent)" />
@@ -428,7 +716,7 @@ export default function App() {
     );
   }
 
-  if (!authLoading && !user && route.view !== 'review' && route.view !== 'login' && route.view !== 'register') {
+  if (!authLoading && !user && route.view !== 'review' && route.view !== 'login' && route.view !== 'register' && route.view !== 'forgot-password' && route.view !== 'verify-otp' && route.view !== 'reset-password') {
     navigateTo('/login');
     return null;
   }
@@ -452,6 +740,12 @@ export default function App() {
         <LoginPage login={login} showToast={showToast} user={user} navigateTo={navigateTo} />
       ) : route.view === 'register' ? (
         <RegisterPage showToast={showToast} navigateTo={navigateTo} />
+      ) : route.view === 'forgot-password' ? (
+        <ForgotPasswordPage showToast={showToast} navigateTo={navigateTo} />
+      ) : route.view === 'verify-otp' ? (
+        <VerifyOtpPage showToast={showToast} navigateTo={navigateTo} />
+      ) : route.view === 'reset-password' ? (
+        <ResetPasswordPage showToast={showToast} navigateTo={navigateTo} />
       ) : route.view === 'super-admin' ? (
         <SuperAdminDashboard showToast={showToast} navigateTo={navigateTo} user={user!} logout={logout} />
       ) : route.view === 'admin' ? (
@@ -809,10 +1103,10 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
 
   const getFilteredFeedbacks = () => {
     if (!feedbacks || feedbacks.length === 0) return [];
-    
+
     const now = new Date();
     let startDate: Date | null = null;
-    
+
     if (chartTimeframe === 'day') {
       startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     } else if (chartTimeframe === 'week') {
@@ -826,7 +1120,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
       start.setHours(0, 0, 0, 0);
       const end = new Date(chartEndDate);
       end.setHours(23, 59, 59, 999);
-      
+
       return feedbacks.filter(fb => {
         const created = new Date(fb.createdAt);
         return created >= start && created <= end;
@@ -834,7 +1128,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
     }
 
     if (!startDate) return feedbacks;
-    
+
     return feedbacks.filter(fb => {
       const created = new Date(fb.createdAt);
       return created >= startDate!;
@@ -976,8 +1270,8 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
         {/* Mobile Header */}
         <div className="mobile-header">
           <div className="mobile-header-logo" onClick={() => navigateTo('/admin')}>
-            <Sparkles size={20} />
-            <span>Review Our</span> Business
+            <Logo size={28} />
+            <span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span>
           </div>
           <button className="mobile-menu-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="Toggle Menu">
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -990,7 +1284,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
         {/* Sidebar */}
         <aside className={`merchant-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
           <div className="sidebar-logo" onClick={() => { navigateTo('/admin'); setIsMobileMenuOpen(false); }}>
-            <Sparkles size={22} />
+            <Logo size={32} />
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.1' }}>
               <span style={{ color: 'var(--accent)' }}>Review Our</span>
               <span>Business</span>
@@ -1544,8 +1838,8 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
                                   </td>
                                   <td style={{ maxWidth: '400px' }}>
                                     <div>
-                                      {isMobile && fb.feedbackText.length > 60 
-                                        ? `${fb.feedbackText.slice(0, 60)}...` 
+                                      {isMobile && fb.feedbackText.length > 60
+                                        ? `${fb.feedbackText.slice(0, 60)}...`
                                         : fb.feedbackText
                                       }
                                     </div>
@@ -1826,7 +2120,7 @@ function AdminDashboard({ showToast, navigateTo, user, logout }: AdminDashboardP
               <h3 style={{ margin: 0 }}>Review Details</h3>
               <button onClick={() => setSelectedReviewPopup(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', color: 'var(--text-secondary)' }}>✕</button>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <span className={`rating-badge ${selectedReviewPopup.rating <= 2 ? 'low' : selectedReviewPopup.rating <= 3 ? 'mid' : 'high'}`} style={{ fontSize: '0.875rem', padding: '0.3rem 0.6rem' }}>
                 <Star size={10} style={{ fill: 'currentColor' }} /> {selectedReviewPopup.rating} Stars
@@ -2227,10 +2521,8 @@ function CustomerReviewView({ businessId, showToast, navigateTo }: CustomerRevie
                   style={{ padding: '0.25rem 1.75rem 0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto' }}
                 >
                   <option value="English">English</option>
-                  <option value="Spanish">Spanish</option>
-                  <option value="French">French</option>
-                  <option value="German">German</option>
                   <option value="Hindi">Hindi</option>
+                  <option value="Gujarati">Gujarati</option>
                 </select>
               </div>
             </div>
@@ -2379,6 +2671,13 @@ function getDemoGeneratedReviews(name: string, category: string, _context: strin
       `इस ${category} में बहुत अच्छी यात्रा रही। वे ग्राहकों की देखभाल और विवरणों पर बहुत ध्यान देते हैं। इसे ज़रूर देखें!`,
       `बढ़िया अनुभव! बहुत तेज़ और मिलनसार स्टाफ, शीर्ष स्तर की सेवा। ${name} पर नियमित रूप से आऊंगा!`,
       `उत्कृष्ट! त्वरित, पेशेवर और बहुत मिलनसार। वास्तव में एक प्रीमियम अनुभव।`
+    ],
+    'Gujarati': [
+      `અમારું ${name}માં અનુભવ શાનદાર રહ્યું! તેમની ${category} સેવાની ગુણવત્તા ઉત્તમ છે। સ્ટાફ ખૂબ મૈત્રીભર્ય હતો અને બધું સારા હતું।`,
+      `${name} ની સરળ ભાષામાં સિફારિશ કરીશ! વાસ્તવમાં વ્યાપારમાં સૌથી સરસ. ખૂબ ધ્યાનદर्शક સેવા અને ઉત્તમ ગુણવત્તા.`,
+      `આ ${category} માં ખૂબ સારી મુસાફરી રહી. તેઓ ગ્રાહકોની સેવા અને વિગતો પર ખૂબ ધ્યાન આપે છે. ઈને ખરેખર તપાસો!`,
+      `ઉત્તમ અનુભવ! ખૂબ જ ઝડપી અને મૈત્રીભર્ય સ્ટાફ, ટૉપ-લેવલ સેવા. હું ${name} નિયમિત આવીશ!`,
+      `ઉત્કૃષ્ટ! ઝડપી, પેશેવર અને ખૂબ મૈત્રીભર્ય. ખરેખર એ પ્રીમિયમ અનુભવ.`
     ]
   };
 
@@ -2458,16 +2757,18 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   // Edit modal state
   const [editModal, setEditModal] = useState<{ show: boolean; biz: any }>({ show: false, biz: null });
   const [editForm, setEditForm] = useState({ name: '', category: '', context: '', googleReviewUrl: '', keywords: '', location: '', mobileNumber: '', salesPersonId: '' });
+  const [qrDownloadBiz, setQrDownloadBiz] = useState<any>(null);
+  const qrDownloadRef = useRef<HTMLDivElement>(null);
 
   // Revenue state
-  const [revenueData, setRevenueData] = useState<{ 
-    totalRevenue: number; 
+  const [revenueData, setRevenueData] = useState<{
+    totalRevenue: number;
     totalCommission: number;
     totalProfit: number;
-    activeSubscriptions: number; 
-    planCounts: any; 
-    monthlyRevenue: any[]; 
-    businessRevenue: any[] 
+    activeSubscriptions: number;
+    planCounts: any;
+    monthlyRevenue: any[];
+    businessRevenue: any[]
   } | null>(null);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [bizPage, setBizPage] = useState(1);
@@ -2499,6 +2800,13 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
 
   // Stock reviews modal state
   const [stockModal, setStockModal] = useState<{ show: boolean; bizId: string; bizName: string }>({ show: false, bizId: '', bizName: '' });
+
+  useEffect(() => {
+    const anyOpen = editModal.show || subModal.show || stockModal.show;
+    document.body.style.overflow = anyOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [editModal.show, subModal.show, stockModal.show]);
+
   const [stockData, setStockData] = useState<{
     stockCounts: { '2': number; '3': number; '4': number; '5': number };
     reviews: { _id: string; rating: number; reviewText: string; isUsed: boolean }[];
@@ -2883,22 +3191,64 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
   };
 
   const handleDeleteBusiness = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this business and all its feedbacks? This action is irreversible.')) return;
+    if (!window.confirm('This will deactivate the business and revoke all access. Continue?')) return;
     try {
-      const response = await fetch(`${API_BASE}/admin/business/${id}`, {
-        method: 'DELETE', credentials: 'include', headers: getAuthHeaders()
+      const res = await fetch(`${API_BASE}/admin/business/${id}/toggle-active`, {
+        method: 'PUT', headers: getAuthHeaders(), credentials: 'include'
       });
-      if (response.ok) {
-        setBusinesses(prev => prev.filter(b => b._id !== id));
-        setFeedbacks(prev => prev.filter(f => f.businessId !== id));
-        showToast('Business deleted.');
+      if (res.ok) {
+        const data = await res.json();
+        setBusinesses(prev => prev.map(b => b._id === id ? { ...b, isActive: data.isActive } : b));
+        showToast('Business deactivated and access revoked.');
+        fetchAdminData();
       }
     } catch (err) {
       console.error(err);
-      setBusinesses(prev => prev.filter(b => b._id !== id));
-      showToast('Offline mode: Deleted business locally.');
+      showToast('Error deactivating business.');
     }
   };
+
+  const downloadSuperAdminQR = (biz: any) => {
+    setQrDownloadBiz(biz);
+  };
+
+  useEffect(() => {
+    if (!qrDownloadBiz || !qrDownloadRef.current) return;
+    const timer = setTimeout(() => {
+      const svg = qrDownloadRef.current?.querySelector('svg');
+      if (!svg) return;
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 800;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      img.onload = () => {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, 800, 800);
+        ctx.drawImage(img, 0, 0, 800, 800);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob((pngBlob) => {
+          if (!pngBlob) return;
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(pngBlob);
+          link.download = `${qrDownloadBiz.name.replace(/\s+/g, '_')}_QR.png`;
+          link.click();
+          URL.revokeObjectURL(link.href);
+          showToast('QR code download started!');
+          setQrDownloadBiz(null);
+        }, 'image/png');
+      };
+      img.src = url;
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [qrDownloadBiz]);
 
   const handleRegisterOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3055,8 +3405,8 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
     <div className="fade-in" style={{ padding: '0 1.5rem' }}>
       <header className="app-header">
         <div className="app-logo" onClick={() => navigateTo('/admin')}>
-          <Sparkles size={24} />
-          <span>Review Our</span> Business
+          <Logo size={32} />
+          <span>Review </span><span style={{ color: 'var(--accent)' }}>Our</span><span> Business</span>
         </div>
 
         {/* Desktop Header User Info */}
@@ -3082,7 +3432,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
       {/* Super Admin Mobile Drawer */}
       <aside className={`super-admin-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-logo" onClick={() => { navigateTo('/admin'); setIsMobileMenuOpen(false); }}>
-          <Sparkles size={22} />
+          <Logo size={32} />
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.1' }}>
             <span style={{ color: 'var(--accent)' }}>Review Our</span>
             <span>Business</span>
@@ -3327,8 +3677,11 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                           <button className="btn btn-outline" onClick={() => handleOpenStockModal(biz)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', borderColor: 'var(--warning)', color: 'var(--warning)' }} title="Manage Stock Reviews">
                             <MessageSquare size={12} />
                           </button>
-                          <button className="btn btn-outline" onClick={() => handleDeleteBusiness(biz._id)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', color: 'var(--danger)' }} title="Delete Business">
-                            <Trash2 size={12} />
+                          <button className="btn btn-outline" onClick={() => downloadSuperAdminQR(biz)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', borderColor: 'var(--accent)', color: 'var(--accent)' }} title="Download QR Code">
+                            <Download size={12} />
+                          </button>
+                          <button className="btn btn-outline" onClick={() => handleDeleteBusiness(biz._id)} style={{ padding: '0.35rem', borderRadius: 'var(--radius-sm)', color: 'var(--danger)' }} title="Deactivate & Revoke Access">
+                            <ShieldOff size={12} />
                           </button>
                         </div>
                       </td>
@@ -3556,12 +3909,12 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   </tr>
                 </thead>
                 <tbody>
-                  {feedbacks.map(fb => (
+                  {feedbacks.filter(fb => fb.businessId).map(fb => (
                     <tr key={fb._id}>
                       <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                         {new Date(fb.createdAt).toLocaleDateString()}
                       </td>
-                      <td style={{ fontWeight: 600 }}>{fb.businessId?.name || 'Unknown Partner'}</td>
+                      <td style={{ fontWeight: 600 }}>{fb.businessId.name}</td>
                       <td>
                         <span className={`rating-badge ${fb.rating <= 2 ? 'low' : fb.rating <= 3 ? 'mid' : 'high'}`}>
                           <Star size={10} style={{ fill: 'currentColor' }} /> {fb.rating} Stars
@@ -3599,7 +3952,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
         <div className="card fade-in">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <h3 style={{ margin: 0 }}>Revenue & Subscription Plans</h3>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
                 {['day', 'week', 'month', 'year', 'custom'].map((tf) => (
@@ -3703,10 +4056,10 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <div style={{ marginBottom: '2rem' }}>
                 <h4 style={{ marginBottom: '1rem' }}>
                   {revTimeframe === 'day' ? 'Hourly Revenue & Profit (Today)' :
-                   revTimeframe === 'week' ? 'Daily Revenue & Profit (Last 7 Days)' :
-                   revTimeframe === 'month' ? 'Weekly Revenue & Profit (Last 30 Days)' :
-                   revTimeframe === 'year' ? 'Monthly Revenue & Profit (Last 12 Months)' :
-                   'Revenue & Profit Breakdown (Custom Range)'}
+                    revTimeframe === 'week' ? 'Daily Revenue & Profit (Last 7 Days)' :
+                      revTimeframe === 'month' ? 'Weekly Revenue & Profit (Last 30 Days)' :
+                        revTimeframe === 'year' ? 'Monthly Revenue & Profit (Last 12 Months)' :
+                          'Revenue & Profit Breakdown (Custom Range)'}
                 </h4>
                 {revenueData.monthlyRevenue && revenueData.monthlyRevenue.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
@@ -3754,7 +4107,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                     </tr>
                   </thead>
                   <tbody>
-                    {(revenueData?.businessRevenue || []).map((br: any, i: number) => (
+                    {(revenueData?.businessRevenue || []).filter((br: any) => br.businessName && br.businessName !== 'Unknown').map((br: any, i: number) => (
                       <tr key={i}>
                         <td style={{ fontWeight: 600 }}>{br.businessName}</td>
                         <td>
@@ -3809,9 +4162,9 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
                   </tr>
                 </thead>
                 <tbody>
-                  {subscriptions.map(sub => (
+                  {subscriptions.filter(sub => sub.businessId).map(sub => (
                     <tr key={sub._id}>
-                      <td style={{ fontWeight: 600 }}>{sub.businessId?.name || 'Unknown'}</td>
+                      <td style={{ fontWeight: 600 }}>{sub.businessId.name}</td>
                       <td>
                         <span className="copy-badge" style={{
                           backgroundColor: sub.plan === 'lifetime' ? 'var(--warning)' : 'var(--accent)',
@@ -4056,7 +4409,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
           onClick={(e) => { if (e.target === e.currentTarget) setSettlementModal({ show: false, sp: null }); }}>
           <div className="card fade-in" style={{ width: '100%', maxWidth: '400px', padding: '2rem' }}>
             <h3 style={{ marginBottom: '1.25rem' }}>Record Payout for {settlementModal.sp.name}</h3>
-            
+
             <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.8125rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Commission Earned:</span>
@@ -4116,14 +4469,14 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
           <div className="card fade-in" style={{ width: '100%', maxWidth: '500px', padding: '2rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ margin: 0 }}>Payout History: {settlementHistoryModal.spName}</h3>
-              <button 
+              <button
                 onClick={() => setSettlementHistoryModal({ show: false, spId: '', spName: '', settlements: [] })}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', color: 'var(--text-secondary)' }}
               >
                 ✕
               </button>
             </div>
-            
+
             {loadingSettlements ? (
               <div style={{ textAlign: 'center', padding: '2rem' }}>
                 <Loader2 size={24} className="spinner" /> Loading payouts...
@@ -4318,7 +4671,7 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto', flex: 1, paddingRight: '0.5rem' }}>
-                
+
                 {/* Stock Counts Summary */}
                 <div className="stock-summary-grid" style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
                   {[5, 4, 3, 2].map(rating => (
@@ -4406,6 +4759,20 @@ function SuperAdminDashboard({ showToast, navigateTo, user, logout }: SuperAdmin
               <button className="btn btn-secondary" onClick={() => setStockModal({ show: false, bizId: '', bizName: '' })}>Close</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Hidden QR code for download */}
+      {qrDownloadBiz && (
+        <div ref={qrDownloadRef} style={{ position: 'fixed', left: '-9999px', top: '-9999px' }}>
+          <QRCodeSVG
+            value={`${window.location.origin}/review/${qrDownloadBiz._id}`}
+            size={400}
+            level="H"
+            bgColor="#FFFFFF"
+            fgColor="#000000"
+            includeMargin={true}
+          />
         </div>
       )}
     </div>
